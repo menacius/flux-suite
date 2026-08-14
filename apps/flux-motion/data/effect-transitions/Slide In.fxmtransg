@@ -1,0 +1,12 @@
+{
+  "format": "flux-motion-general-transition",
+  "version": 1,
+  "id": "general.slide-in",
+  "name": "Slide In/Out",
+  "type": "slide",
+  "easing": "ease-in-out",
+  "duration": 0.55,
+  "direction": "left",
+  "offset": 120,
+  "category": "Transitions/General/Slide"
+}

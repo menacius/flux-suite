@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "drop-shadow",
+  "name": "Drop Shadow",
+  "type": "drop-shadow",
+  "category": "Effects/Perspective"
+}

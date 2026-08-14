@@ -1,0 +1,10 @@
+{
+  "format": "flux-motion-general-transition",
+  "version": 1,
+  "id": "general.fade",
+  "name": "Fade",
+  "type": "opacity",
+  "easing": "ease-in-out",
+  "duration": 0.45,
+  "category": "Transitions/General/Opacity"
+}

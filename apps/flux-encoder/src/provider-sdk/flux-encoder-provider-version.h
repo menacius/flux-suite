@@ -1,0 +1,4 @@
+#pragma once
+#include <stdint.h>
+#define FLUX_ENCODER_RENDER_PROVIDER_ABI_VERSION 1u
+#define FLUX_ENCODER_RENDER_PROVIDER_PROTOCOL_VERSION 1u

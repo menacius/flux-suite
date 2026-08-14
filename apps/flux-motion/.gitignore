@@ -1,0 +1,42 @@
+# Build trees and generated CMake files
+/build/
+/build-*/
+/out/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Compiled binaries and packages
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.exe
+*.pdb
+*.zip
+*.tar
+*.tar.gz
+
+# IDE and editor state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Python and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Packaging and platform caches
+.flatpak-builder/
+_deps/
+vcpkg_installed/
+
+# Logs and OS metadata
+*.log
+.DS_Store
+Thumbs.db

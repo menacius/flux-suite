@@ -1,0 +1,16 @@
+{
+  "format": "flux-motion-text-transition",
+  "version": 1,
+  "id": "text.slide-in",
+  "name": "Slide In/Out",
+  "type": "text-slide",
+  "easing": "ease-in-out",
+  "duration": 0.9,
+  "unit": "character",
+  "direction": "up",
+  "offset": 55,
+  "stagger": 0.5,
+  "fade": true,
+  "cropToUnitBounds": false,
+  "category": "Transitions/Text/Slide"
+}

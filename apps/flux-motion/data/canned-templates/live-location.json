@@ -1,0 +1,10 @@
+{
+  "id": 104,
+  "title": "Live Location",
+  "description": "Live location identifier with prominent LIVE status.",
+  "default_name": "ATHENS",
+  "category": "News",
+  "subcategory": "Location IDs",
+  "collection": "Big News Studio",
+  "file_name": "live-location.fxmt"
+}

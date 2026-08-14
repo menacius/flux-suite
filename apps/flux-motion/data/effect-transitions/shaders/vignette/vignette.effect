@@ -1,0 +1,85 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float4 effectColor;
+uniform float opacity;
+uniform float amount;
+uniform float scale;
+uniform float softness;
+uniform float roundness;
+uniform float2 center;
+uniform int invert;
+
+sampler_state textureSampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float2 layer_space_uv(float2 surface_uv)
+{
+    float2 delta = surface_uv - layerUvOrigin;
+    float determinant = layerUvAxisX.x * layerUvAxisY.y -
+                        layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(determinant) <= 0.0000001) {
+        float2 extent = max(abs(layerUvRect.zw), float2(0.000001, 0.000001));
+        return (surface_uv - layerUvRect.xy) / extent;
+    }
+    return float2(
+        (delta.x * layerUvAxisY.y - delta.y * layerUvAxisY.x) / determinant,
+        (layerUvAxisX.x * delta.y - layerUvAxisX.y * delta.x) / determinant);
+}
+
+float4 PSVignette(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float2 effect_uv = layer_space_uv(v_in.uv);
+    float2 p = (effect_uv - center) * 2.0;
+    float aspect = max(layerPixelSize.x / max(layerPixelSize.y, 1.0), 0.0001);
+    float shape_mix = saturate(roundness * 0.5 + 0.5);
+    p.x *= lerp(aspect, 1.0, shape_mix);
+
+    float d = length(p) / max(scale, 0.001);
+    float feather = max(softness, 0.0001);
+    float mask = smoothstep(1.0 - feather, 1.0 + feather, d);
+    if (invert != 0)
+        mask = 1.0 - mask;
+
+    float mix_amount = saturate(mask * max(amount, 0.0) *
+                                clamp(opacity, 0.0, 1.0) * effectColor.a);
+    float3 straight = base.a > 0.0001 ? base.rgb / base.a : float3(0.0, 0.0, 0.0);
+    straight = lerp(straight, effectColor.rgb, mix_amount);
+    return float4(clamp(straight, 0.0, 1.0) * base.a, base.a);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSVignette(v_in);
+    }
+}

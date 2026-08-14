@@ -1,0 +1,20 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: Component directory name
+        required: true
+        type: string
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/development/validate-layout.ps1
+      - name: Release policy
+        shell: pwsh
+        run: Write-Host "Validated release request for ${{ inputs.component }}; signing and publication remain in the protected release environment."

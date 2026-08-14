@@ -1,0 +1,34 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "linux-release",
+      "displayName": "Linux Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "FLUX_ENCODER_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows MSVC Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-msvc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "FLUX_ENCODER_BUILD_TESTS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "linux-release", "configurePreset": "linux-release" },
+    { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release" }
+  ],
+  "testPresets": [
+    { "name": "linux-release", "configurePreset": "linux-release", "output": { "outputOnFailure": true } },
+    { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release", "output": { "outputOnFailure": true } }
+  ]
+}

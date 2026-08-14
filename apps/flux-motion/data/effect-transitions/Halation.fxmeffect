@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "halation",
+  "name": "Halation",
+  "type": "halation",
+  "category": "Effects/Light & Optical"
+}

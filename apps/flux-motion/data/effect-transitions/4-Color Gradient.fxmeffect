@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "4-color-gradient",
+  "name": "4-Color Gradient",
+  "type": "4-color-gradient",
+  "category": "Effects/Generate"
+}

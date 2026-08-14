@@ -1,0 +1,234 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d blurredImage;
+uniform float2 texelSize;
+uniform float2 direction;
+uniform float centerWeight;
+uniform float4 pairOffsets;
+uniform float4 pairWeights;
+uniform int prefilterMode;
+uniform float threshold;
+uniform float opacity;
+uniform float4 effectColor;
+uniform float2 offset;
+uniform float intensity;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float4 prefilter_sample(float4 value)
+{
+    if (prefilterMode == 1) {
+        float luminance = dot(value.rgb, float3(0.2126, 0.7090, 0.0784));
+        float contribution = max(luminance - threshold, 0.0) / max(luminance, 0.00001);
+        return value * contribution;
+    }
+    return value;
+}
+
+float4 PSSeparableGaussian(VertDataOut v_in) : TARGET
+{
+    float2 axis = direction * texelSize;
+    float4 result = prefilter_sample(image.Sample(textureSampler, v_in.uv)) * centerWeight;
+
+    float2 delta = axis * pairOffsets.x;
+    result += (prefilter_sample(image.Sample(textureSampler, v_in.uv + delta)) +
+               prefilter_sample(image.Sample(textureSampler, v_in.uv - delta))) * pairWeights.x;
+    delta = axis * pairOffsets.y;
+    result += (prefilter_sample(image.Sample(textureSampler, v_in.uv + delta)) +
+               prefilter_sample(image.Sample(textureSampler, v_in.uv - delta))) * pairWeights.y;
+    delta = axis * pairOffsets.z;
+    result += (prefilter_sample(image.Sample(textureSampler, v_in.uv + delta)) +
+               prefilter_sample(image.Sample(textureSampler, v_in.uv - delta))) * pairWeights.z;
+    delta = axis * pairOffsets.w;
+    result += (prefilter_sample(image.Sample(textureSampler, v_in.uv + delta)) +
+               prefilter_sample(image.Sample(textureSampler, v_in.uv - delta))) * pairWeights.w;
+    return result;
+}
+
+float4 PSDownsample(VertDataOut v_in) : TARGET
+{
+    float2 halfTexel = texelSize * 0.5;
+    float4 result = prefilter_sample(image.Sample(textureSampler, v_in.uv + float2(-halfTexel.x, -halfTexel.y)));
+    result += prefilter_sample(image.Sample(textureSampler, v_in.uv + float2( halfTexel.x, -halfTexel.y)));
+    result += prefilter_sample(image.Sample(textureSampler, v_in.uv + float2(-halfTexel.x,  halfTexel.y)));
+    result += prefilter_sample(image.Sample(textureSampler, v_in.uv + float2( halfTexel.x,  halfTexel.y)));
+    return result * 0.25;
+}
+
+float4 PSComposite(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float4 blurred = blurredImage.Sample(textureSampler, v_in.uv);
+    return lerp(base, blurred, clamp(opacity, 0.0, 1.0));
+}
+
+float4 PSDropShadowComposite(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float alpha = blurredImage.Sample(textureSampler, v_in.uv - offset * texelSize).a;
+    float shadowAlpha = clamp(alpha * opacity * effectColor.a, 0.0, 1.0);
+    float3 shadowRgb = effectColor.rgb * shadowAlpha;
+    float remaining = 1.0 - base.a;
+    return float4(base.rgb + shadowRgb * remaining,
+                  base.a + shadowAlpha * remaining);
+}
+
+float4 PSGlowComposite(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float blurredAlpha = blurredImage.Sample(textureSampler, v_in.uv).a;
+    float glowAlpha = clamp(max(blurredAlpha - base.a, 0.0) *
+                            opacity * effectColor.a, 0.0, 1.0);
+    float remaining = 1.0 - base.a;
+    return float4(base.rgb + effectColor.rgb * glowAlpha * remaining,
+                  base.a + glowAlpha * remaining);
+}
+
+float4 PSInnerGlowComposite(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    if (base.a <= 0.000001)
+        return base;
+    float blurredAlpha = blurredImage.Sample(textureSampler, v_in.uv).a;
+    float mask = clamp((base.a - blurredAlpha) * opacity * effectColor.a,
+                       0.0, 1.0);
+    float3 straight = base.rgb / max(base.a, 0.00001);
+    straight = lerp(straight, effectColor.rgb, mask);
+    return float4(straight * base.a, base.a);
+}
+
+float4 PSInnerShadowComposite(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    if (base.a <= 0.000001)
+        return base;
+    float shiftedAlpha = blurredImage.Sample(textureSampler,
+                                             v_in.uv - offset * texelSize).a;
+    float mask = clamp((base.a - shiftedAlpha) * opacity * effectColor.a,
+                       0.0, 1.0);
+    float3 straight = base.rgb / max(base.a, 0.00001);
+    straight = lerp(straight, effectColor.rgb, mask);
+    return float4(straight * base.a, base.a);
+}
+
+float4 PSBloomComposite(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float4 bloom = blurredImage.Sample(textureSampler, v_in.uv);
+    float gain = max(intensity, 0.0) * clamp(opacity, 0.0, 1.0) *
+                 effectColor.a;
+    float3 added = bloom.rgb * effectColor.rgb * gain;
+    float addedAlpha = bloom.a * gain;
+    return float4(min(base.rgb + added, float3(1.0, 1.0, 1.0)),
+                  max(base.a, addedAlpha));
+}
+
+/* Compatibility technique for older surface paths. The unified compositor
+ * uses Gaussian + Composite and supplies the packed kernel parameters. */
+float4 PSCopy(VertDataOut v_in) : TARGET
+{
+    return image.Sample(textureSampler, v_in.uv);
+}
+
+technique Gaussian
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSSeparableGaussian(v_in);
+    }
+}
+
+technique Downsample
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSDownsample(v_in);
+    }
+}
+
+technique Composite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSComposite(v_in);
+    }
+}
+
+technique DropShadowComposite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSDropShadowComposite(v_in);
+    }
+}
+
+technique GlowComposite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSGlowComposite(v_in);
+    }
+}
+
+technique InnerGlowComposite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSInnerGlowComposite(v_in);
+    }
+}
+
+technique InnerShadowComposite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSInnerShadowComposite(v_in);
+    }
+}
+
+technique BloomComposite
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSBloomComposite(v_in);
+    }
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSCopy(v_in);
+    }
+}

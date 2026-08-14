@@ -1,0 +1,12 @@
+{
+  "format": "flux-motion-general-transition",
+  "version": 1,
+  "id": "general.wipe",
+  "name": "Wipe",
+  "type": "wipe",
+  "easing": "ease-in-out",
+  "duration": 0.6,
+  "direction": "left",
+  "softness": 0.05,
+  "category": "Transitions/General/Wipe"
+}

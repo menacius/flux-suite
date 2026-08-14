@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "edge-detect",
+  "name": "Edge Detect",
+  "type": "edge-detect",
+  "category": "Effects/Stylize"
+}

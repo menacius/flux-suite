@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 948.81 363.98">
+  <defs>
+    <style>
+      .cls-1 {
+        font-size: 30px;
+      }
+
+      .cls-1, .cls-2, .cls-3 {
+        font-family: Satoshi-Medium, Satoshi;
+        font-weight: 500;
+      }
+
+      .cls-1, .cls-3 {
+        fill: #fff;
+      }
+
+      .cls-2, .cls-4 {
+        fill: #7838f5;
+      }
+
+      .cls-2, .cls-3 {
+        font-size: 41.94px;
+      }
+
+      .cls-5 {
+        letter-spacing: .31em;
+      }
+
+      .cls-6 {
+        letter-spacing: .18em;
+      }
+
+      .cls-7 {
+        fill: url(#radial-gradient);
+      }
+
+      .cls-8 {
+        letter-spacing: .27em;
+      }
+
+      .cls-9 {
+        letter-spacing: .29em;
+      }
+
+      .cls-10 {
+        letter-spacing: .31em;
+      }
+
+      .cls-11 {
+        letter-spacing: .23em;
+      }
+
+      .cls-12 {
+        fill: #121016;
+      }
+
+      .cls-13 {
+        letter-spacing: .31em;
+      }
+
+      .cls-14 {
+        letter-spacing: .16em;
+      }
+
+      .cls-15 {
+        letter-spacing: .28em;
+      }
+
+      .cls-16 {
+        letter-spacing: .3em;
+      }
+
+      .cls-17, .cls-18 {
+        fill: #fff;
+        font-family: Satoshi-Medium, Satoshi;
+        font-weight: 500;
+      }
+
+      .cls-17 {
+        font-size: 15px;
+        letter-spacing: .18em;
+        opacity: .82;
+      }
+
+      .cls-18 {
+        font-size: 11px;
+        letter-spacing: .14em;
+        opacity: .62;
+      }
+    </style>
+    <radialGradient id="radial-gradient" cx="474.4" cy="181.99" fx="-50.93" fy="-24.12" r="761.03" gradientUnits="userSpaceOnUse">
+      <stop offset=".16" stop-color="#291c4c"/>
+      <stop offset=".37" stop-color="#21163d"/>
+      <stop offset=".78" stop-color="#0c0817"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <rect class="cls-7" width="948.81" height="363.98" rx="36.9" ry="36.9"/>
+    <rect class="cls-12" x="92.82" y="109.27" width="145.44" height="145.44" rx="18.35" ry="18.35"/>
+    <g>
+      <rect class="cls-4" x="130.42" y="138.99" width="71.72" height="20.32"/>
+      <rect class="cls-4" x="130.42" y="171.83" width="55.82" height="20.32"/>
+      <rect class="cls-4" x="130.42" y="203.45" width="20.32" height="20.32"/>
+    </g>
+    <g>
+      <text class="cls-3" transform="translate(284.18 149.15)"><tspan class="cls-13" x="0" y="0">F</tspan><tspan class="cls-15" x="36.28" y="0">L</tspan><tspan class="cls-13" x="69.92" y="0">UX</tspan></text>
+      <text id="fxm-version" class="cls-1" transform="translate(284.18 254.71)"><tspan class="cls-16" x="0" y="0">2026 - v0.8.19-alpha</tspan></text>
+      <text id="fxm-development-version" class="cls-17" transform="translate(284.18 285.5)"></text>
+      <text id="fxm-copyright" class="cls-18" transform="translate(284.18 314)">&#169; 2026 OMNIATV. ALL RIGHTS RESERVED.</text>
+      <text class="cls-2" transform="translate(284.2 203.03)"><tspan class="cls-6" x="0" y="0">M</tspan><tspan class="cls-14" x="43.83" y="0">O</tspan><tspan class="cls-6" x="83.13" y="0">TION </tspan></text>
+    </g>
+  </g>
+</svg>

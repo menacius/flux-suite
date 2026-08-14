@@ -1,0 +1,49 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float saturation;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float4 PSSaturation(VertDataOut v_in) : TARGET
+{
+    float4 rgba = image.Sample(textureSampler, v_in.uv);
+    if (rgba.a <= 0.0)
+        return rgba;
+
+    float3 straight = rgba.rgb / rgba.a;
+    float luma = dot(straight, float3(0.2126, 0.7090, 0.0784));
+    straight = luma + (straight - luma) * clamp(saturation, 0.0, 4.0);
+    rgba.rgb = clamp(straight, 0.0, 1.0) * rgba.a;
+    return rgba;
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSSaturation(v_in);
+    }
+}

@@ -1,0 +1,161 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float opacity;
+uniform float amount;
+uniform float radius;
+uniform float scale;
+uniform float softness;
+uniform float threshold;
+uniform float angle;
+uniform float evolution;
+uniform float complexity;
+uniform float2 center;
+uniform float2 direction;
+uniform float distortion;
+uniform float4 effectColor;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+sampler_state pointSampler { Filter = Point; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v_in) { VertDataOut o; o.pos=mul(float4(v_in.pos.xyz,1.0),ViewProj); o.uv=v_in.uv; return o; }
+float4 sample_image(float2 uv) { return image.Sample(textureSampler, uv); }
+float2 rotate2(float2 p, float a) { float c=cos(a), s=sin(a); return float2(c*p.x-s*p.y, s*p.x+c*p.y); }
+float4 mix_base(float4 base, float4 effected) { return lerp(base, effected, saturate(opacity)); }
+float4 PSLensDistortion(VertDataOut v_in) : TARGET
+{
+    float2 p = v_in.uv - center;
+    float aspect = texelSize.y / max(texelSize.x, 0.000001);
+    p.x *= aspect;
+    float r2 = dot(p,p);
+    float factor = 1.0 + distortion * r2 + distortion * 0.35 * r2 * r2;
+    p *= factor;
+    p.x /= aspect;
+    float4 base = sample_image(v_in.uv);
+    return mix_base(base, sample_image(center + p));
+}
+float4 PSChromaticAberration(VertDataOut v_in) : TARGET
+{
+    float2 radial = v_in.uv - center;
+    float len = length(radial);
+    float2 axis = len > 0.00001 ? radial / len : direction;
+    float2 shift = axis * texelSize * max(amount, 0.0) * (0.5 + len * 1.5);
+    float4 base = sample_image(v_in.uv);
+    float4 r = sample_image(v_in.uv + shift);
+    float4 b = sample_image(v_in.uv - shift);
+    float4 outv = float4(r.r, base.g, b.b, base.a);
+    return mix_base(base, outv);
+}
+float4 PSDirectionalBlur(VertDataOut v_in) : TARGET
+{
+    float2 d = direction * texelSize * max(radius, 0.0) * 0.25;
+    float4 sum = sample_image(v_in.uv) * 0.20;
+    sum += (sample_image(v_in.uv+d)+sample_image(v_in.uv-d))*0.16;
+    sum += (sample_image(v_in.uv+d*2.0)+sample_image(v_in.uv-d*2.0))*0.12;
+    sum += (sample_image(v_in.uv+d*3.0)+sample_image(v_in.uv-d*3.0))*0.08;
+    sum += (sample_image(v_in.uv+d*4.0)+sample_image(v_in.uv-d*4.0))*0.04;
+    return mix_base(sample_image(v_in.uv), sum);
+}
+float4 PSZoomBlur(VertDataOut v_in) : TARGET
+{
+    float2 v = (center - v_in.uv) * max(radius,0.0) * 0.0025;
+    float4 sum = sample_image(v_in.uv) * 0.20;
+    sum += sample_image(v_in.uv+v)*0.16;
+    sum += sample_image(v_in.uv+v*2.0)*0.14;
+    sum += sample_image(v_in.uv+v*3.0)*0.12;
+    sum += sample_image(v_in.uv+v*4.0)*0.10;
+    sum += sample_image(v_in.uv+v*5.0)*0.08;
+    sum += sample_image(v_in.uv+v*6.0)*0.06;
+    sum += sample_image(v_in.uv+v*7.0)*0.04;
+    sum += sample_image(v_in.uv+v*8.0)*0.02;
+    return mix_base(sample_image(v_in.uv), sum);
+}
+float4 PSRadialBlur(VertDataOut v_in) : TARGET
+{
+    float2 p=v_in.uv-center;
+    float a=max(radius,0.0)*0.00035;
+    float4 sum=sample_image(v_in.uv)*0.20;
+    sum+=(sample_image(center+rotate2(p,a))+sample_image(center+rotate2(p,-a)))*0.16;
+    sum+=(sample_image(center+rotate2(p,a*2.0))+sample_image(center+rotate2(p,-a*2.0)))*0.12;
+    sum+=(sample_image(center+rotate2(p,a*3.0))+sample_image(center+rotate2(p,-a*3.0)))*0.08;
+    sum+=(sample_image(center+rotate2(p,a*4.0))+sample_image(center+rotate2(p,-a*4.0)))*0.04;
+    return mix_base(sample_image(v_in.uv),sum);
+}
+float4 PSRipple(VertDataOut v_in) : TARGET
+{
+    float2 p=v_in.uv-center;
+    float d=length(p);
+    float2 n=d>0.00001?p/d:float2(0.0,0.0);
+    float wave=sin(d*max(scale,0.001)*6.2831853+evolution)*amount;
+    float2 uv=v_in.uv+n*wave*texelSize*8.0;
+    return mix_base(sample_image(v_in.uv),sample_image(uv));
+}
+float4 PSWaveWarp(VertDataOut v_in) : TARGET
+{
+    float radians=angle*0.01745329252;
+    float2 axis=float2(cos(radians),sin(radians));
+    float2 perp=float2(-axis.y,axis.x);
+    float phase=dot(v_in.uv,axis)*max(scale,0.001)*6.2831853+evolution;
+    float2 uv=v_in.uv+perp*sin(phase)*amount*texelSize*8.0;
+    return mix_base(sample_image(v_in.uv),sample_image(uv));
+}
+float4 PSPixelate(VertDataOut v_in) : TARGET
+{
+    float2 cells=max(float2(radius,radius),float2(1.0,1.0));
+    float2 pixel=texelSize*cells;
+    float2 uv=(floor(v_in.uv/pixel)+0.5)*pixel;
+    return mix_base(sample_image(v_in.uv),image.Sample(pointSampler,uv));
+}
+float edge_luma(float3 c) { return dot(c,float3(0.2126,0.7152,0.0722)); }
+float4 PSEdgeDetect(VertDataOut v_in) : TARGET
+{
+    float2 d=texelSize*max(radius,1.0);
+    float gx=edge_luma(sample_image(v_in.uv+float2(d.x,0)).rgb)-edge_luma(sample_image(v_in.uv-float2(d.x,0)).rgb);
+    float gy=edge_luma(sample_image(v_in.uv+float2(0,d.y)).rgb)-edge_luma(sample_image(v_in.uv-float2(0,d.y)).rgb);
+    float edge=smoothstep(threshold,threshold+0.08,sqrt(gx*gx+gy*gy)*max(amount,0.0));
+    float4 base=sample_image(v_in.uv);
+    float4 outv=float4(effectColor.rgb*edge,base.a);
+    return mix_base(base,outv);
+}
+float4 PSPosterize(VertDataOut v_in) : TARGET
+{
+    float4 base=sample_image(v_in.uv);
+    float levels=max(floor(complexity+0.5),2.0);
+    float3 straight=base.a>0.00001?base.rgb/base.a:float3(0.0,0.0,0.0);
+    straight=floor(straight*(levels-1.0)+0.5)/(levels-1.0);
+    return mix_base(base,float4(straight*base.a,base.a));
+}
+float4 PSThreshold(VertDataOut v_in) : TARGET
+{
+    float4 base=sample_image(v_in.uv);
+    float3 straight=base.a>0.00001?base.rgb/base.a:float3(0.0,0.0,0.0);
+    float y=edge_luma(straight);
+    float v=smoothstep(threshold-softness*0.25,threshold+softness*0.25,y);
+    float4 outv=float4(effectColor.rgb*v*base.a,base.a);
+    return mix_base(base,outv);
+}
+float4 PSScanlines(VertDataOut v_in) : TARGET
+{
+    float4 base=sample_image(v_in.uv);
+    float radians=angle*0.01745329252;
+    float2 axis=float2(cos(radians),sin(radians));
+    float coordinate=dot(v_in.uv/texelSize,axis);
+    float stripe=0.5+0.5*cos(coordinate*6.2831853/max(scale,1.0)+evolution);
+    stripe=smoothstep(softness,1.0,stripe);
+    float darken=1.0-saturate(amount)*(1.0-stripe);
+    return mix_base(base,float4(base.rgb*darken,base.a));
+}
+technique LensDistortion { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSLensDistortion(v_in); } }
+technique ChromaticAberration { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSChromaticAberration(v_in); } }
+technique DirectionalBlur { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSDirectionalBlur(v_in); } }
+technique ZoomBlur { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSZoomBlur(v_in); } }
+technique RadialBlur { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSRadialBlur(v_in); } }
+technique Ripple { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSRipple(v_in); } }
+technique WaveWarp { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSWaveWarp(v_in); } }
+technique Pixelate { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSPixelate(v_in); } }
+technique EdgeDetect { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSEdgeDetect(v_in); } }
+technique Posterize { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSPosterize(v_in); } }
+technique Threshold { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSThreshold(v_in); } }
+technique Scanlines { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSScanlines(v_in); } }
+technique Draw { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSLensDistortion(v_in); } }

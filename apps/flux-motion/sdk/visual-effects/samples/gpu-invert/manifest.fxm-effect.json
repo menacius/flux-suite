@@ -1,0 +1,46 @@
+{
+  "apiVersion": 4,
+  "id": "com.fluxmotion.samples.invert.v1",
+  "name": "SDK Invert",
+  "provider": "fluxmotion.samples",
+  "version": "1.0.0",
+  "category": "SDK Samples",
+  "schemaVersion": 1,
+  "backend": "gpu",
+  "shader": "invert.effect",
+  "inputCount": 1,
+  "colorSpace": "preserve-input",
+  "alpha": "premultiplied-preserve",
+  "parameters": {
+    "amount": {
+      "type": "float",
+      "label": "Amount",
+      "min": 0.0,
+      "max": 1.0,
+      "step": 0.01,
+      "default": 1.0,
+      "animatable": true
+    }
+  },
+  "customPropertyWidgets": {
+    "groups": [
+      { "label": "Invert", "properties": ["amount"] }
+    ]
+  },
+  "renderPasses": [
+    { "name": "main", "shader": "invert.effect", "technique": "Draw" }
+  ],
+  "inputs": [
+    { "id": "source", "label": "Layer Source", "kind": "current-layer", "required": true }
+  ],
+  "requirements": {
+    "colorSpace": "preserve-input",
+    "alpha": "premultiplied-preserve",
+    "expandsBounds": false,
+    "cacheableWhenStatic": true
+  },
+  "stateSerialization": {
+    "format": "json-object",
+    "missingPluginPlaceholder": true
+  }
+}

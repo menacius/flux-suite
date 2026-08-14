@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "ripple",
+  "name": "Ripple",
+  "type": "ripple",
+  "category": "Effects/Distortion"
+}

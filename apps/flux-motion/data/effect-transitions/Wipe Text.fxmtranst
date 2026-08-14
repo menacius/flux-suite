@@ -1,0 +1,14 @@
+{
+  "format": "flux-motion-text-transition",
+  "version": 1,
+  "id": "text.wipe",
+  "name": "Wipe Text",
+  "type": "text-wipe",
+  "easing": "ease-in-out",
+  "duration": 0.9,
+  "unit": "character",
+  "direction": "left",
+  "softness": 0.04,
+  "stagger": 0.35,
+  "category": "Transitions/Text/Wipe"
+}

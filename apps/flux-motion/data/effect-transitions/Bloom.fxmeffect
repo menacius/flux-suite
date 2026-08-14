@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "bloom",
+  "name": "Bloom",
+  "type": "bloom",
+  "category": "Effects/Blur & Sharpen"
+}

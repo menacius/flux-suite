@@ -1,0 +1,87 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d hardMask;
+uniform texture2d shadowImage;
+uniform float2 texelSize;
+uniform float4 effectColor;
+uniform float2 direction;
+uniform float shadowLength;
+uniform float falloff;
+uniform float opacity;
+uniform int outsideHardAlpha;
+uniform int outsideHardAlphaInvert;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float long_shadow_mask(float2 uv)
+{
+    float2 dir = length(direction) > 0.0 ? normalize(direction) : float2(1.0, 0.0);
+    float shadow = 0.0;
+    const int sampleCount = 24;
+    for (int i = 1; i <= sampleCount; ++i) {
+        float u = (float)i / (float)sampleCount;
+        float fade = pow(1.0 - u, max(falloff, 0.0));
+        shadow = max(shadow, image.Sample(textureSampler,
+            uv - dir * texelSize * shadowLength * u).a * fade);
+    }
+    return shadow;
+}
+
+float4 PSShadowMask(VertDataOut v_in) : TARGET
+{
+    float alpha = long_shadow_mask(v_in.uv);
+    return float4(alpha, alpha, alpha, alpha);
+}
+
+float4 PSLongShadow(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float shadowAlpha = clamp(shadowImage.Sample(textureSampler, v_in.uv).a *
+                              opacity * effectColor.a, 0.0, 1.0);
+    float4 shadow = float4(effectColor.rgb * shadowAlpha, shadowAlpha);
+    float hardInside = step(0.5, hardMask.Sample(textureSampler, v_in.uv).a);
+    float hardRegion = outsideHardAlphaInvert != 0 ? hardInside : (1.0 - hardInside);
+    float remaining = outsideHardAlpha != 0 ? hardRegion : (1.0 - base.a);
+    return float4(base.rgb + shadow.rgb * remaining,
+                  base.a + shadow.a * remaining);
+}
+
+technique ShadowMask
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSShadowMask(v_in);
+    }
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSLongShadow(v_in);
+    }
+}

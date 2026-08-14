@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "bilateral-sharpen",
+  "name": "Bilateral Sharpen",
+  "type": "bilateral-sharpen",
+  "category": "Effects/Blur & Sharpen"
+}

@@ -1,0 +1,10 @@
+{
+  "id": 206,
+  "title": "Podcast Break Screen",
+  "description": "Full-screen intermission graphic for short breaks.",
+  "default_name": "WE'LL BE RIGHT BACK",
+  "category": "Podcast",
+  "subcategory": "Full Screen",
+  "collection": "Casual Podcast",
+  "file_name": "podcast-break-screen.fxmt"
+}

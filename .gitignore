@@ -1,0 +1,60 @@
+# Build trees and generated CMake files
+/out/
+/build/
+**/build/
+**/build-*/
+**/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/compile_commands.json
+
+# Downloaded dependencies and package caches
+**/.deps/
+**/_deps/
+**/vcpkg_installed/
+**/.cache/
+
+# Binaries, packages, and deployment output
+**/dist/
+**/Dist/
+**/artifacts/
+**/deliverables/
+**/Deploy/
+*.dll
+*.so
+*.dylib
+*.lib
+*.a
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.o
+*.zip
+*.tar
+*.tar.gz
+*.AppImage
+
+# IDE, tooling, and OS state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+.DS_Store
+Thumbs.db
+
+# Credentials and signing material
+*.pem
+*.pfx
+*.p12
+*.key
+*.private.json
+secrets/

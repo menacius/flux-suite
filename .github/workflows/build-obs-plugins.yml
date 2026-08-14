@@ -1,0 +1,16 @@
+name: Validate OBS plugins
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "plugins/obs/**"
+      - "packages/flux-common/**"
+
+jobs:
+  source-boundaries:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/development/validate-layout.ps1

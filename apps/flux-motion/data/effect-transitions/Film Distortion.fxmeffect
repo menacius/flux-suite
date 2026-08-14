@@ -1,0 +1,30 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "film-distortion",
+  "name": "Film Distortion",
+  "category": [
+    "Effects",
+    "Distortion",
+    "Damage"
+  ],
+  "type": "film-distortion",
+  "parameters": {
+    "profile": 8,
+    "amount": 0.62,
+    "scale": 1.8,
+    "softness": 0.22,
+    "complexity": 7.5,
+    "spread": 2.4,
+    "falloff": 0.7,
+    "speed": 1.0,
+    "evolution": 0.0,
+    "seed": 17,
+    "animated": true,
+    "monochrome": false,
+    "color": "#fff1c4",
+    "temporalStability": true,
+    "secondaryColor": "#5c2407"
+  }
+}

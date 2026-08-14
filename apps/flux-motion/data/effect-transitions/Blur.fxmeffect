@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "blur",
+  "name": "Blur",
+  "type": "blur",
+  "category": "Effects/Blur & Sharpen"
+}

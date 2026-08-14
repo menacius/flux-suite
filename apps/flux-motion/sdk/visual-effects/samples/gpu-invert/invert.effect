@@ -1,0 +1,39 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float amount = 1.0;
+
+sampler_state linearSampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertData {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertData VSDefault(VertData v)
+{
+    VertData o;
+    o.pos = mul(float4(v.pos.xyz, 1.0), ViewProj);
+    o.uv = v.uv;
+    return o;
+}
+
+float4 PSDraw(VertData v) : TARGET
+{
+    float4 c = image.Sample(linearSampler, v.uv);
+    float3 inverted = c.a > 0.0 ? c.a - c.rgb : c.rgb;
+    c.rgb = lerp(c.rgb, inverted, saturate(amount));
+    return c;
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v);
+        pixel_shader  = PSDraw(v);
+    }
+}

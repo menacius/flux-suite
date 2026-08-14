@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest an improvement to a Flux component
+title: "[Feature]: "
+body:
+  - type: input
+    id: component
+    attributes:
+      label: Component
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the workflow and expected result.
+    validations:
+      required: true

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://software.omniatv.com/flux-suite/schemas/manifest.schema.json",
+  "title": "Flux Suite Update Manifest",
+  "type": "object",
+  "required": ["publishedAt", "products"],
+  "properties": {
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "version", "platform", "url", "sha256", "size"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1 },
+          "platform": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "format": "uri" },
+          "sha256": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+          "size": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

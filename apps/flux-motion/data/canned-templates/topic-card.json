@@ -1,0 +1,10 @@
+{
+  "id": 204,
+  "title": "Topic Card",
+  "description": "Simple discussion-topic card for chapter changes.",
+  "default_name": "TODAY'S TOPIC",
+  "category": "Podcast",
+  "subcategory": "Topic Cards",
+  "collection": "Casual Podcast",
+  "file_name": "topic-card.fxmt"
+}

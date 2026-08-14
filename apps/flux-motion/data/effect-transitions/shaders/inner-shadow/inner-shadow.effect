@@ -1,0 +1,26 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d blurredImage;
+uniform float2 texelSize;
+uniform float4 effectColor;
+uniform float2 offset;
+uniform float opacity;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v) { VertDataOut o; o.pos = mul(float4(v.pos.xyz, 1.0), ViewProj); o.uv = v.uv; return o; }
+
+float4 PSInnerShadow(VertDataOut v) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v.uv);
+    if (base.a <= 0.0)
+        return base;
+    float shiftedAlpha = blurredImage.Sample(textureSampler, v.uv - offset * texelSize).a;
+    float mask = clamp((base.a - shiftedAlpha) * opacity * effectColor.a, 0.0, 1.0);
+    float3 straight = base.rgb / max(base.a, 0.00001);
+    straight = lerp(straight, effectColor.rgb, mask);
+    return float4(straight * base.a, base.a);
+}
+
+technique Draw { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSInnerShadow(v_in); } }

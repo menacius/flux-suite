@@ -1,0 +1,15 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "lens-flare",
+  "name": "Lens Flare",
+  "category": ["Effects", "Generate", "Lens Flares"],
+  "type": "lens-flare",
+  "parameters": {
+    "profile": 0, "color": "FFFFD59A", "secondaryColor": "FF4EA3FF",
+    "opacity": 0.85, "amount": 1.0, "scale": 1.0, "size": 0.22,
+    "spread": 0.8, "falloff": 2.0, "centerX": 0.5, "centerY": 0.5,
+    "angle": 0.0, "samples": 6, "complexity": 6.0, "blendMode": 3
+  }
+}

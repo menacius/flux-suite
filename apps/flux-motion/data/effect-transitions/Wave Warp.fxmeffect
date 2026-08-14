@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "wave-warp",
+  "name": "Wave Warp",
+  "type": "wave-warp",
+  "category": "Effects/Distortion"
+}

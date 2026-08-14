@@ -1,0 +1,15 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "trim-paths",
+  "name": "Trim Paths",
+  "type": "trim-paths",
+  "category": "Effects/Generate",
+  "parameters": {
+    "start": 0.0,
+    "end": 100.0,
+    "trimOffset": 0.0,
+    "trimMultipleShapes": 0
+  }
+}

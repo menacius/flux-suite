@@ -1,0 +1,10 @@
+{
+  "id": 102,
+  "title": "Headline Strap",
+  "description": "Full-width headline strap for major developing stories.",
+  "default_name": "Major story develops",
+  "category": "News",
+  "subcategory": "Straps",
+  "collection": "Big News Studio",
+  "file_name": "headline-strap.fxmt"
+}

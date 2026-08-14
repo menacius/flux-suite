@@ -1,0 +1,524 @@
+{
+  "../../packages/flux-common/Shared/rendering-engine/title-source.cpp": {
+    "facade_lines": 121,
+    "original_lines": 15791,
+    "modules": [
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/source-runtime.inc",
+        "source_lines": [
+          107,
+          1316
+        ],
+        "line_count": 1210
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/scene-masks-properties.inc",
+        "source_lines": [
+          1317,
+          2524
+        ],
+        "line_count": 1208
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/layer-evaluation-layout.inc",
+        "source_lines": [
+          2525,
+          3731
+        ],
+        "line_count": 1207
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/compatibility-text-rendering.inc",
+        "source_lines": [
+          3732,
+          4940
+        ],
+        "line_count": 1209
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/compatibility-layer-raster.inc",
+        "source_lines": [
+          4941,
+          6135
+        ],
+        "line_count": 1195
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/compatibility-effects-compositor.inc",
+        "source_lines": [
+          6136,
+          7341
+        ],
+        "line_count": 1206
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/gpu-resources-primitives.inc",
+        "source_lines": [
+          7342,
+          8546
+        ],
+        "line_count": 1205
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/gpu-effects-transitions.inc",
+        "source_lines": [
+          8547,
+          9753
+        ],
+        "line_count": 1207
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/gpu-masks-groups-cache.inc",
+        "source_lines": [
+          9754,
+          10955
+        ],
+        "line_count": 1202
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/gpu-presentation-readback.inc",
+        "source_lines": [
+          10956,
+          12163
+        ],
+        "line_count": 1208
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/gpu-session-lifecycle.inc",
+        "source_lines": [
+          12164,
+          13374
+        ],
+        "line_count": 1211
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/gpu-frame-cache-alias.inc",
+        "source_lines": [
+          0,
+          0
+        ],
+        "line_count": 48
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/source-lifecycle-playback.inc",
+        "source_lines": [
+          13375,
+          14590
+        ],
+        "line_count": 1216
+      },
+      {
+        "file": "../../packages/flux-common/Shared/rendering-engine/title-source/source-registration.inc",
+        "source_lines": [
+          14591,
+          15791
+        ],
+        "line_count": 1201
+      }
+    ]
+  },
+  "src/editor/title-editor.cpp": {
+    "facade_lines": 49,
+    "original_lines": 8841,
+    "modules": [
+      {
+        "file": "src/editor/title-editor/window-session.inc",
+        "source_lines": [
+          35,
+          1009
+        ],
+        "line_count": 931
+      },
+      {
+        "file": "src/editor/title-editor/ui-construction.inc",
+        "source_lines": [
+          1010,
+          1989
+        ],
+        "line_count": 960
+      },
+      {
+        "file": "src/editor/title-editor/panels-colors.inc",
+        "source_lines": [
+          1990,
+          2968
+        ],
+        "line_count": 979
+      },
+      {
+        "file": "src/editor/title-editor/commands-docks.inc",
+        "source_lines": [
+          2969,
+          3929
+        ],
+        "line_count": 961
+      },
+      {
+        "file": "src/editor/title-editor/document-shape-editing.inc",
+        "source_lines": [
+          3930,
+          4926
+        ],
+        "line_count": 997
+      },
+      {
+        "file": "src/editor/title-editor/playback-cache-preferences.inc",
+        "source_lines": [
+          4927,
+          5907
+        ],
+        "line_count": 981
+      },
+      {
+        "file": "src/editor/title-editor/layout-template-tools.inc",
+        "source_lines": [
+          5908,
+          6884
+        ],
+        "line_count": 977
+      },
+      {
+        "file": "src/editor/title-editor/signal-handlers.inc",
+        "source_lines": [
+          6885,
+          7866
+        ],
+        "line_count": 982
+      },
+      {
+        "file": "src/editor/title-editor/editor-events.inc",
+        "source_lines": [
+          7867,
+          8841
+        ],
+        "line_count": 975
+      }
+    ]
+  },
+  "src/canvas/canvas-preview.cpp": {
+    "facade_lines": 72,
+    "original_lines": 9077,
+    "modules": [
+      {
+        "file": "src/canvas/canvas-preview/preview-cache-view.inc",
+        "source_lines": [
+          59,
+          1147
+        ],
+        "line_count": 1089
+      },
+      {
+        "file": "src/canvas/canvas-preview/geometry-selection.inc",
+        "source_lines": [
+          1148,
+          2253
+        ],
+        "line_count": 1106
+      },
+      {
+        "file": "src/canvas/canvas-preview/spatial-bezier-keyframes.inc",
+        "source_lines": [
+          0,
+          0
+        ],
+        "line_count": 787
+      },
+      {
+        "file": "src/canvas/canvas-preview/transform-snap.inc",
+        "source_lines": [
+          2254,
+          3355
+        ],
+        "line_count": 1102
+      },
+      {
+        "file": "src/canvas/canvas-preview/path-gradient-tools.inc",
+        "source_lines": [
+          3356,
+          4457
+        ],
+        "line_count": 1102
+      },
+      {
+        "file": "src/canvas/canvas-preview/pointer-events.inc",
+        "source_lines": [
+          4458,
+          5555
+        ],
+        "line_count": 1098
+      },
+      {
+        "file": "src/canvas/canvas-preview/keyboard-wheel-events.inc",
+        "source_lines": [
+          5556,
+          6636
+        ],
+        "line_count": 1081
+      },
+      {
+        "file": "src/canvas/canvas-preview/canvas-overlay-paint.inc",
+        "source_lines": [
+          6637,
+          7729
+        ],
+        "line_count": 1093
+      },
+      {
+        "file": "src/canvas/canvas-preview/gpu-frame-rendering.inc",
+        "source_lines": [
+          7730,
+          8832
+        ],
+        "line_count": 1103
+      }
+    ]
+  },
+  "src/editor/properties-panel.cpp": {
+    "facade_lines": 27,
+    "original_lines": 6465,
+    "modules": [
+      {
+        "file": "src/editor/properties-panel/popup-state.inc",
+        "source_lines": [
+          16,
+          809
+        ],
+        "line_count": 774
+      },
+      {
+        "file": "src/editor/properties-panel/construction-gradient-image-signals.inc",
+        "source_lines": [
+          810,
+          1626
+        ],
+        "line_count": 817
+      },
+      {
+        "file": "src/editor/properties-panel/construction-transform-character.inc",
+        "source_lines": [
+          1627,
+          2519
+        ],
+        "line_count": 893
+      },
+      {
+        "file": "src/editor/properties-panel/construction-type-live-shape.inc",
+        "source_lines": [
+          2520,
+          3262
+        ],
+        "line_count": 743
+      },
+      {
+        "file": "src/editor/properties-panel/color-gradient-editing.inc",
+        "source_lines": [
+          3263,
+          4053
+        ],
+        "line_count": 791
+      },
+      {
+        "file": "src/editor/properties-panel/auto-style-and-property-actions.inc",
+        "source_lines": [
+          4054,
+          4856
+        ],
+        "line_count": 803
+      },
+      {
+        "file": "src/editor/properties-panel/property-synchronization.inc",
+        "source_lines": [
+          4857,
+          5659
+        ],
+        "line_count": 803
+      },
+      {
+        "file": "src/editor/properties-panel/selection-refresh.inc",
+        "source_lines": [
+          5660,
+          6465
+        ],
+        "line_count": 806
+      }
+    ]
+  },
+  "src/editor/title-dock.cpp": {
+    "facade_lines": 122,
+    "original_lines": 6395,
+    "modules": [
+      {
+        "file": "src/editor/title-dock/template-library-helpers.inc",
+        "source_lines": [
+          112,
+          1004
+        ],
+        "line_count": 849
+      },
+      {
+        "file": "src/editor/title-dock/import-export-helpers.inc",
+        "source_lines": [
+          1005,
+          1912
+        ],
+        "line_count": 908
+      },
+      {
+        "file": "src/editor/title-dock/dock-ui.inc",
+        "source_lines": [
+          1913,
+          2800
+        ],
+        "line_count": 888
+      },
+      {
+        "file": "src/editor/title-dock/collapsible-titles.inc",
+        "source_lines": [
+          0,
+          0
+        ],
+        "line_count": 207
+      },
+      {
+        "file": "src/editor/title-dock/dock-lifecycle.inc",
+        "source_lines": [
+          2801,
+          3685
+        ],
+        "line_count": 885
+      },
+      {
+        "file": "src/editor/title-dock/list-selection-cues.inc",
+        "source_lines": [
+          3686,
+          4601
+        ],
+        "line_count": 916
+      },
+      {
+        "file": "src/editor/title-dock/live-text-cache-playlist.inc",
+        "source_lines": [
+          4602,
+          5492
+        ],
+        "line_count": 891
+      },
+      {
+        "file": "src/editor/title-dock/title-actions.inc",
+        "source_lines": [
+          5493,
+          6395
+        ],
+        "line_count": 903
+      }
+    ]
+  },
+  "src/cache/cache-manager.cpp": {
+    "facade_lines": 55,
+    "original_lines": 5441,
+    "modules": [
+      {
+        "file": "src/cache/cache-manager/visual-hash-keying.inc",
+        "source_lines": [
+          48,
+          931
+        ],
+        "line_count": 883
+      },
+      {
+        "file": "src/cache/cache-manager/disk-cache-storage.inc",
+        "source_lines": [
+          932,
+          1835
+        ],
+        "line_count": 904
+      },
+      {
+        "file": "src/cache/cache-manager/cache-policy-invalidation.inc",
+        "source_lines": [
+          1836,
+          2741
+        ],
+        "line_count": 906
+      },
+      {
+        "file": "src/cache/cache-manager/live-cue-state.inc",
+        "source_lines": [
+          2742,
+          3644
+        ],
+        "line_count": 903
+      },
+      {
+        "file": "src/cache/cache-manager/live-cue-queueing.inc",
+        "source_lines": [
+          3645,
+          4541
+        ],
+        "line_count": 897
+      },
+      {
+        "file": "src/cache/cache-manager/worker-publication.inc",
+        "source_lines": [
+          4542,
+          5441
+        ],
+        "line_count": 900
+      }
+    ]
+  },
+  "src/editor/title-editor-internal.h": {
+    "facade_lines": 145,
+    "original_lines": 5420,
+    "modules": [
+      {
+        "file": "src/editor/title-editor-internal/widget-property-helpers.inc",
+        "source_lines": [
+          138,
+          1027
+        ],
+        "line_count": 890
+      },
+      {
+        "file": "src/editor/title-editor-internal/rich-text-color-utils.inc",
+        "source_lines": [
+          1028,
+          1893
+        ],
+        "line_count": 866
+      },
+      {
+        "file": "src/editor/title-editor-internal/rich-text-model-adapters.inc",
+        "source_lines": [
+          1894,
+          2776
+        ],
+        "line_count": 845
+      },
+      {
+        "file": "src/editor/title-editor-internal/text-layout-rendering.inc",
+        "source_lines": [
+          2777,
+          3659
+        ],
+        "line_count": 883
+      },
+      {
+        "file": "src/editor/title-editor-internal/canvas-rendering-helpers.inc",
+        "source_lines": [
+          3660,
+          4540
+        ],
+        "line_count": 881
+      },
+      {
+        "file": "src/editor/title-editor-internal/hierarchy-model.inc",
+        "source_lines": [
+          4541,
+          5420
+        ],
+        "line_count": 880
+      }
+    ]
+  }
+}

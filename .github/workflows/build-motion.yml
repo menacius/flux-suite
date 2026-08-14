@@ -1,0 +1,17 @@
+name: Validate Flux Motion
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/flux-motion/**"
+      - "packages/flux-common/**"
+      - "plugins/obs/flux-motion/**"
+
+jobs:
+  source-boundaries:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/development/validate-layout.ps1

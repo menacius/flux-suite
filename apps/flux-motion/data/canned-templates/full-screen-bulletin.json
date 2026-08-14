@@ -1,0 +1,10 @@
+{
+  "id": 106,
+  "title": "Full Screen Bulletin",
+  "description": "Full-screen bulletin for urgent headlines and summaries.",
+  "default_name": "BREAKING NEWS",
+  "category": "News",
+  "subcategory": "Full Screen",
+  "collection": "Big News Studio",
+  "file_name": "full-screen-bulletin.fxmt"
+}

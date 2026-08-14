@@ -1,0 +1,7 @@
+{
+  "format": "obs-fxm-effect-preset", "version": 1, "kind": "effect",
+  "id": "roughen-edges", "name": "Roughen Edges",
+  "category": ["Effects", "Stylize", "Roughen Edges"], "type": "roughen-edges",
+  "parameters": {"amount":0.18, "scale":48.0, "softness":0.2,
+    "complexity":4.0, "evolution":0.0, "seed":1, "invert":false}
+}

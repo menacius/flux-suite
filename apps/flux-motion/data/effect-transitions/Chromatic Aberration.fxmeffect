@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "chromatic-aberration",
+  "name": "Chromatic Aberration",
+  "type": "chromatic-aberration",
+  "category": "Effects/Light & Optical"
+}

@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "spill-suppression",
+  "name": "Spill Suppression",
+  "type": "spill-suppression",
+  "category": "Effects/Keying & Matte"
+}

@@ -1,0 +1,12 @@
+{
+  "format": "flux-motion-general-transition",
+  "version": 1,
+  "id": "general.zoom-blur",
+  "name": "Zoom Blur",
+  "type": "zoom-blur",
+  "easing": "ease-in-out",
+  "duration": 0.7,
+  "scaleFrom": 0.65,
+  "blur": 28,
+  "category": "Transitions/General/Zoom"
+}

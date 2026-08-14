@@ -1,0 +1,84 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float2 direction;
+uniform float depth;
+uniform float height;
+uniform float softness;
+uniform float opacity;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float height_sample(float2 uv)
+{
+    float4 sampleValue = image.Sample(textureSampler, uv);
+    float3 straight = sampleValue.a > 0.0001
+        ? sampleValue.rgb / sampleValue.a
+        : float3(0.0, 0.0, 0.0);
+    float luminance = dot(straight, float3(0.2126, 0.7152, 0.0722));
+    return sampleValue.a * (0.35 + luminance * 0.65);
+}
+
+float filtered_height(float2 uv, float2 perpendicular, float radius)
+{
+    float2 spread = perpendicular * texelSize * radius;
+    float centerValue = height_sample(uv);
+    float sideA = height_sample(uv + spread);
+    float sideB = height_sample(uv - spread);
+    return (centerValue * 2.0 + sideA + sideB) * 0.25;
+}
+
+float4 PSEmboss(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    if (base.a <= 0.0001 || opacity <= 0.0001)
+        return base;
+
+    float2 lightDirection = normalize(direction + float2(0.00001, 0.0));
+    float2 perpendicular = float2(-lightDirection.y, lightDirection.x);
+    float sampleDistance = max(height, 0.1);
+    float2 offset = lightDirection * texelSize * sampleDistance;
+    float blurRadius = max(softness, 0.0);
+
+    float towardLight = filtered_height(v_in.uv - offset, perpendicular, blurRadius);
+    float awayFromLight = filtered_height(v_in.uv + offset, perpendicular, blurRadius);
+    float slope = clamp((towardLight - awayFromLight) * max(depth, 0.1), -1.0, 1.0);
+
+    float3 straight = base.rgb / base.a;
+    float highlight = max(slope, 0.0) * clamp(opacity, 0.0, 1.0);
+    float shadow = max(-slope, 0.0) * clamp(opacity, 0.0, 1.0);
+    straight *= 1.0 - shadow * 0.85;
+    straight = 1.0 - (1.0 - straight) * (1.0 - highlight * 0.85);
+    return float4(clamp(straight, 0.0, 1.0) * base.a, base.a);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSEmboss(v_in);
+    }
+}

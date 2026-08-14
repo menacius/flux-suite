@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "directional-blur",
+  "name": "Directional Blur",
+  "type": "directional-blur",
+  "category": "Effects/Blur & Sharpen"
+}

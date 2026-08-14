@@ -1,0 +1,43 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 24,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base-windows",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/out/build/${presetName}"
+    },
+    {
+      "name": "motion-windows",
+      "inherits": "base-windows",
+      "cacheVariables": {
+        "FLUX_BUILD_MOTION": "ON"
+      }
+    },
+    {
+      "name": "encoder-windows",
+      "inherits": "base-windows",
+      "cacheVariables": {
+        "FLUX_BUILD_ENCODER": "ON"
+      }
+    },
+    {
+      "name": "installer-windows",
+      "inherits": "base-windows",
+      "cacheVariables": {
+        "FLUX_BUILD_INSTALLER": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "motion-windows", "configurePreset": "motion-windows", "configuration": "RelWithDebInfo" },
+    { "name": "encoder-windows", "configurePreset": "encoder-windows", "configuration": "RelWithDebInfo" },
+    { "name": "installer-windows", "configurePreset": "installer-windows", "configuration": "RelWithDebInfo" }
+  ]
+}

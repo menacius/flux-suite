@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "light-wrap",
+  "name": "Light Wrap",
+  "type": "light-wrap",
+  "category": "Effects/Light and Optical"
+}

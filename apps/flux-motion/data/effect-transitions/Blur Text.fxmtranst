@@ -1,0 +1,13 @@
+{
+  "format": "flux-motion-text-transition",
+  "version": 1,
+  "id": "text.blur",
+  "name": "Blur Text",
+  "type": "text-blur",
+  "easing": "ease-in-out",
+  "duration": 0.9,
+  "unit": "character",
+  "blur": 20,
+  "stagger": 0.45,
+  "category": "Transitions/Text/Blur"
+}

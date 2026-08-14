@@ -1,0 +1,93 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float4 effectColor;
+uniform float opacity;
+uniform float amount;
+uniform float scale;
+uniform float softness;
+uniform float complexity;
+uniform float spread;
+uniform float falloff;
+uniform float brightness;
+uniform float contrast;
+uniform float speed;
+uniform float time;
+uniform float evolution;
+uniform float seed;
+uniform float2 noiseOffset;
+uniform float aspect;
+uniform float lacunarity;
+uniform float gain;
+uniform int profile;
+uniform int animatedNoise;
+uniform int monochrome;
+uniform int invert;
+uniform int affectAlpha;
+uniform int clampOutput;
+uniform int temporalStability;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut o;
+    o.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    o.uv = v_in.uv;
+    return o;
+}
+float2 layer_space_uv(float2 uv) {
+    float2 d=uv-layerUvOrigin; float det=layerUvAxisX.x*layerUvAxisY.y-layerUvAxisX.y*layerUvAxisY.x;
+    if(abs(det)<=0.0000001){float2 e=max(abs(layerUvRect.zw),float2(0.000001,0.000001));return (uv-layerUvRect.xy)/e;}
+    return float2((d.x*layerUvAxisY.y-d.y*layerUvAxisY.x)/det,(layerUvAxisX.x*d.y-layerUvAxisX.y*d.x)/det);
+}
+float hash1(float2 p){return frac(sin(dot(p,float2(12.9898,78.233)))*43758.5453);}
+float2 grad2(float2 p){float2 g=float2(hash1(p+float2(17.17,3.11)),hash1(p+float2(43.73,29.41)))*2.0-1.0;return g/max(length(g),0.0001);}
+float value_noise(float2 p){float2 c=floor(p),f=frac(p);f=f*f*(3.0-2.0*f);return lerp(lerp(hash1(c),hash1(c+float2(1,0)),f.x),lerp(hash1(c+float2(0,1)),hash1(c+1.0),f.x),f.y);}
+float gradient_noise(float2 p){float2 c=floor(p),f=frac(p),u=f*f*f*(f*(f*6.0-15.0)+10.0);float a=dot(grad2(c),f),b=dot(grad2(c+float2(1,0)),f-float2(1,0)),cc=dot(grad2(c+float2(0,1)),f-float2(0,1)),d=dot(grad2(c+1.0),f-1.0);return saturate(lerp(lerp(a,b,u.x),lerp(cc,d,u.x),u.y)*0.72+0.5);}
+float gaussian(float2 p){float s=hash1(p+1.17)+hash1(p+7.31)+hash1(p+13.73)+hash1(p+29.41)+hash1(p+47.83)+hash1(p+71.19);return saturate((s/6.0-0.5)*1.9+0.5);}
+float cell_d(float2 c,float2 f,float2 n){float2 q=n+float2(hash1(c+n),hash1(c+n+47.17));return length(q-f);}
+float cellular(float2 p){float2 c=floor(p),f=frac(p);float n=cell_d(c,f,float2(-1,-1));n=min(n,cell_d(c,f,float2(0,-1)));n=min(n,cell_d(c,f,float2(1,-1)));n=min(n,cell_d(c,f,float2(-1,0)));n=min(n,cell_d(c,f,float2(0,0)));n=min(n,cell_d(c,f,float2(1,0)));n=min(n,cell_d(c,f,float2(-1,1)));n=min(n,cell_d(c,f,float2(0,1)));n=min(n,cell_d(c,f,float2(1,1)));return saturate(n);}
+float shape(float v,int m){if(m==1)return abs(v*2.0-1.0);if(m==2){float r=1.0-abs(v*2.0-1.0);return r*r;}return v;}
+float fractal(float2 p,float oct,float lac,float g,int m){
+    lac=max(lac,1.01);g=saturate(g);float2 p0=p,p1=p0*lac+13.1,p2=p1*lac+7.7,p3=p2*lac+19.3,p4=p3*lac+3.9,p5=p4*lac+29.1,p6=p5*lac+11.7,p7=p6*lac+41.3;
+    float a0=1.0,a1=g,a2=a1*g,a3=a2*g,a4=a3*g,a5=a4*g,a6=a5*g,a7=a6*g;
+    float e0=1.0,e1=step(1.5,oct),e2=step(2.5,oct),e3=step(3.5,oct),e4=step(4.5,oct),e5=step(5.5,oct),e6=step(6.5,oct),e7=step(7.5,oct);
+    float v=shape(gradient_noise(p0),m)*a0*e0+shape(gradient_noise(p1),m)*a1*e1+shape(gradient_noise(p2),m)*a2*e2+shape(gradient_noise(p3),m)*a3*e3+shape(gradient_noise(p4),m)*a4*e4+shape(gradient_noise(p5),m)*a5*e5+shape(gradient_noise(p6),m)*a6*e6+shape(gradient_noise(p7),m)*a7*e7;
+    return v/max(a0*e0+a1*e1+a2*e2+a3*e3+a4*e4+a5*e5+a6*e6+a7*e7,0.0001);
+}
+float blue(float2 px,float phase){float2 p=px+float2(phase*17.0,phase*31.0);return frac(52.9829189*frac(dot(p,float2(0.06711056,0.00583715))));}
+float profile_noise(float2 p,float2 px,float phase,int mode){
+    if(mode==0) return gaussian(floor(p*1.8));
+    if(mode==1){float grain=gaussian(p*1.35);float clump=fractal(p*0.16,max(complexity,4.0),lacunarity,gain,0);return saturate(grain*0.72+clump*0.28);}
+    if(mode==2){float sensor=gaussian(floor(p*1.15));float row=hash1(float2(floor(px.y/2.0),seed+phase))-0.5;float col=hash1(float2(floor(px.x/3.0),seed*2.0+phase))-0.5;return saturate(sensor+row*0.16+col*0.06);}
+    if(mode==3) return fractal(p*0.13,complexity,lacunarity,gain,0);
+    if(mode==4) return fractal(p*0.2,complexity,lacunarity,gain,1);
+    if(mode==5) return fractal(p*0.18,complexity,lacunarity,gain,2);
+    if(mode==6){float c=cellular(p*0.24);return saturate(1.0-c*0.85);}
+    if(mode==7) return blue(floor(px),phase);
+    return gaussian(floor(p));
+}
+float4 PSNoise(VertDataOut v_in):TARGET{
+    float4 base=image.Sample(textureSampler,v_in.uv);float2 uv=layer_space_uv(v_in.uv);float phaseAnim=0.0;
+    if(animatedNoise!=0){phaseAnim=time*speed;if(temporalStability!=0)phaseAnim=floor(phaseAnim*60.0+0.5)/60.0;}
+    float phase=evolution+seed*17.13+phaseAnim;float2 px=uv*max(layerPixelSize,float2(1,1));float ar=pow(2.0,clamp(aspect,-3.0,3.0));float2 p=(px+noiseOffset)/max(scale,0.001);p=float2(p.x*ar,p.y/ar)+float2(phase,phase*0.731);
+    float strength=max(amount,0.0)*clamp(opacity,0.0,1.0);float3 straight=base.a>0.000001?base.rgb/base.a:float3(0,0,0);
+    float v=profile_noise(p,px,phaseAnim,profile);float3 n=float3(v,v,v);if(monochrome==0){n.g=profile_noise(p+float2(37,17),px+37,phaseAnim+11,profile);n.b=profile_noise(p+float2(91,53),px+91,phaseAnim+23,profile);}
+    n=lerp(n,float3(0.5,0.5,0.5),saturate(softness));n=(n-0.5)*max(contrast,0.0)+0.5+brightness*0.5;if(invert!=0)n=1.0-n;
+    float3 weight=max(effectColor.rgb,float3(0,0,0));float a=base.a;if(affectAlpha!=0)a=base.a+(n.r-0.5)*strength*effectColor.a;if(clampOutput!=0)a=saturate(a);
+    float3 result=(straight+(n-0.5)*strength*weight)*a;if(clampOutput!=0)result=clamp(result,0.0,a);return float4(result,a);
+}
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSNoise(v_in);
+    }
+}

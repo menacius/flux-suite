@@ -1,0 +1,33 @@
+# Shared runtime inventory for Flux Suite applications.
+set(OBS_FXM_SHARED_SOURCES
+    "${FLUX_SUITE_COMMON_DIR}/Shared/asset-path-provider.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/editor-host-interfaces.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/flux-encoder-client.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/frame-rate-provider.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/host-context-provider.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/logger.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/motion-blur-sampling.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/title-preview-renderer.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/title-localization.cpp"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/system-memory.cpp"
+)
+
+set(OBS_FXM_SHARED_HEADERS
+    "${FLUX_SUITE_COMMON_DIR}/Shared/audio-interfaces.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/asset-path-provider.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/command-transport.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/editor-host-interfaces.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/external-json-path.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/flux-encoder-client.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/frame-rate-provider.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/host-context-provider.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/logger.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/motion-blur-sampling.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/performance-counters.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-interfaces.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/title-preview-renderer.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/title-render-session.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/system-memory.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/title-localization.h"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/translation-provider.h"
+)

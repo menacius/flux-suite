@@ -1,0 +1,10 @@
+{
+  "id": 205,
+  "title": "Social Handle",
+  "description": "Compact social-media handle and follow prompt.",
+  "default_name": "@yourhandle",
+  "category": "Podcast",
+  "subcategory": "Social",
+  "collection": "Casual Podcast",
+  "file_name": "social-handle.fxmt"
+}

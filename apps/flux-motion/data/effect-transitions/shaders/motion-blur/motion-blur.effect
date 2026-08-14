@@ -1,0 +1,68 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float2 direction;
+uniform float samples;
+uniform float opacity;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float4 PSMotionBlur(VertDataOut v_in) : TARGET
+{
+    float4 center = image.Sample(textureSampler, v_in.uv);
+    float sample_count = clamp(samples, 2.0, 64.0);
+    float2 dir = length(direction) > 0.0 ? normalize(direction) : float2(1.0, 0.0);
+    float4 sum = float4(0.0, 0.0, 0.0, 0.0);
+    float weight = 0.0;
+
+    const int max_samples = 32;
+    for (int i = 0; i < max_samples; ++i) {
+        if ((float)i >= sample_count)
+            break;
+        float u = sample_count <= 1.0 ? 0.0 : ((float)i / (sample_count - 1.0)) - 0.5;
+        sum += image.Sample(textureSampler, v_in.uv + dir * texelSize * u);
+        weight += 1.0;
+    }
+
+    float4 blurred = weight > 0.0 ? sum / weight : center;
+    float mix_amount = clamp(opacity, 0.0, 1.0);
+    float4 result = lerp(center, blurred, mix_amount);
+
+    // Development Version 250: preserve the current pixel alpha so applying
+    // Motion Blur does not make the object itself semi-transparent.  Pixels
+    // outside the original coverage can still receive the blurred trail.
+    result.a = max(center.a, result.a);
+    result.rgb = min(result.rgb, result.a.xxx);
+    return result;
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSMotionBlur(v_in);
+    }
+}

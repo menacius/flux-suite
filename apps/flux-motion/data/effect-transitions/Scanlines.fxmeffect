@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "scanlines",
+  "name": "Scanlines",
+  "type": "scanlines",
+  "category": "Effects/Stylize"
+}

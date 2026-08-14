@@ -1,0 +1,27 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d hardMask;
+uniform texture2d blurredImage;
+uniform float4 effectColor;
+uniform float opacity;
+uniform int outsideHardAlpha;
+uniform int outsideHardAlphaInvert;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v) { VertDataOut o; o.pos = mul(float4(v.pos.xyz, 1.0), ViewProj); o.uv = v.uv; return o; }
+
+float4 PSGlow(VertDataOut v) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v.uv);
+    float blurredAlpha = blurredImage.Sample(textureSampler, v.uv).a;
+    float glowAlpha = clamp(max(blurredAlpha - base.a, 0.0) * opacity * effectColor.a, 0.0, 1.0);
+    float4 glow = float4(effectColor.rgb * glowAlpha, glowAlpha);
+    float hardInside = step(0.5, hardMask.Sample(textureSampler, v.uv).a);
+    float hardRegion = outsideHardAlphaInvert != 0 ? hardInside : (1.0 - hardInside);
+    float remaining = outsideHardAlpha != 0 ? hardRegion : (1.0 - base.a);
+    return float4(base.rgb + glow.rgb * remaining, base.a + glow.a * remaining);
+}
+
+technique Draw { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSGlow(v_in); } }

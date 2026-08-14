@@ -1,0 +1,1 @@
+{"format":"flux-motion-general-transition","version":1,"id":"image-wipe","name":"Image Wipe","category":["Transitions","General","Image Wipe"],"type":"image-wipe","duration":0.8,"image":"","channel":0,"invert":false,"softness":0.1,"easing":"linear"}

@@ -1,0 +1,390 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d artifactTexture;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float4 effectColor;
+uniform float4 secondaryColor;
+uniform float opacity;
+uniform float amount;
+uniform float scale;
+uniform float softness;
+uniform float complexity;
+uniform float spread;
+uniform float falloff;
+uniform float brightness;
+uniform float contrast;
+uniform float speed;
+uniform float time;
+uniform float evolution;
+uniform float seed;
+uniform float2 noiseOffset;
+uniform float aspect;
+uniform int profile;
+uniform int damageProfile;
+uniform int animatedNoise;
+uniform int clampOutput;
+uniform int temporalStability;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+sampler_state pointSampler { Filter = Point; AddressU = Clamp; AddressV = Clamp; };
+sampler_state artifactSampler { Filter = Linear; AddressU = Wrap; AddressV = Wrap; };
+
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut o;
+    o.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    o.uv = v_in.uv;
+    return o;
+}
+
+float2 layer_space_uv(float2 uv)
+{
+    float2 d = uv - layerUvOrigin;
+    float det = layerUvAxisX.x * layerUvAxisY.y - layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(det) <= 0.0000001) {
+        float2 e = max(abs(layerUvRect.zw), float2(0.000001, 0.000001));
+        return (uv - layerUvRect.xy) / e;
+    }
+    return float2((d.x * layerUvAxisY.y - d.y * layerUvAxisY.x) / det,
+                  (layerUvAxisX.x * d.y - layerUvAxisX.y * d.x) / det);
+}
+
+float2 texture_uv_from_layer_uv(float2 luv)
+{
+    return layerUvOrigin + layerUvAxisX * luv.x + layerUvAxisY * luv.y;
+}
+
+float hash1(float2 p)
+{
+    return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453123);
+}
+
+float signed_hash(float2 p)
+{
+    return hash1(p) * 2.0 - 1.0;
+}
+
+float4 sample_artifact_texture(float2 uv, float2 px, float frame, float profile_offset)
+{
+    float2 drift = noiseOffset * 0.00073 + float2(frame * 0.013 + seed * 0.017,
+                                                  frame * 0.007 - seed * 0.011);
+    float2 tiled = uv * max(1.0, scale * 0.052) + drift + profile_offset;
+    float4 tex = artifactTexture.Sample(artifactSampler, tiled);
+    float luma = dot(tex.rgb, float3(0.299, 0.587, 0.114));
+    float detail = abs(luma - 0.5) * 2.0;
+    float edge = dot(artifactTexture.Sample(pointSampler, tiled + float2(1.0 / 512.0, 0.0)).rgb, float3(0.299, 0.587, 0.114));
+    tex.a = saturate(max(detail, abs(edge - luma) * 3.0));
+    return tex;
+}
+
+float gate(float value, float threshold, float soft)
+{
+    return smoothstep(threshold - soft, threshold + soft, value);
+}
+
+float line_mask(float x, float center, float width)
+{
+    return 1.0 - smoothstep(0.0, max(width, 0.00001), abs(x - center));
+}
+
+float phase_value()
+{
+    float p = evolution + seed * 13.37;
+    if (animatedNoise != 0) {
+        float t = time * speed;
+        if (temporalStability != 0)
+            t = floor(t * 60.0 + 0.5) / 60.0;
+        p += t;
+    }
+    return p;
+}
+
+float4 sample_premul(float2 uv)
+{
+    return image.Sample(textureSampler, saturate(uv));
+}
+
+float3 straight_rgb(float4 c)
+{
+    return c.a > 0.000001 ? c.rgb / c.a : float3(0.0, 0.0, 0.0);
+}
+
+float4 premul_from_rgb(float3 rgb, float alpha)
+{
+    if (clampOutput != 0)
+        rgb = saturate(rgb);
+    return float4(rgb * alpha, alpha);
+}
+
+float grain_hash(float2 p)
+{
+    float n = hash1(p + 1.17) + hash1(p + 7.31) + hash1(p + 13.73) + hash1(p + 29.41);
+    return saturate(n * 0.25);
+}
+
+float organic_noise(float2 p, float octaves)
+{
+    float amp = 0.55;
+    float sum = 0.0;
+    float norm = 0.0;
+    float2 q = p;
+    for (int i = 0; i < 5; ++i) {
+        if ((float)i >= octaves)
+            break;
+        sum += grain_hash(q) * amp;
+        norm += amp;
+        q = q * 2.17 + float2(19.1, 7.3);
+        amp *= 0.52;
+    }
+    return norm > 0.0 ? sum / norm : 0.0;
+}
+
+float3 color_correct(float3 rgb, float strength)
+{
+    rgb = (rgb - 0.5) * max(contrast, 0.0) + 0.5 + brightness * 0.35 * strength;
+    return rgb;
+}
+
+/* legacy token: film_scratches; organic replacement: film_vertical_scratch */
+float film_vertical_scratch(float2 luv, float2 px, float frame, float id, float strength)
+{
+    float base_col = hash1(float2(id, seed + floor(frame * 0.35)));
+    float wander = sin(luv.y * (5.0 + id * 1.7) + frame * (0.11 + id * 0.03) + seed) * (0.002 + 0.012 * falloff);
+    float center = base_col + wander + signed_hash(float2(id, frame)) * 0.012;
+    float width = (0.0009 + 0.0065 * softness) * (1.0 + strength * (0.6 + id * 0.11));
+    float broken = gate(hash1(float2(floor(px.y / max(12.0, scale * (3.0 + id))), floor(frame * 0.5) + id)),
+                        0.42 + strength * 0.08, 0.16 + softness * 0.16);
+    float active = gate(hash1(float2(id, floor(frame * 0.12) + seed)), 0.64 - strength * 0.28, 0.05 + softness * 0.08);
+    return line_mask(luv.x, center, width) * broken * active;
+}
+
+float film_hair_fiber(float2 luv, float2 px, float frame, float strength)
+{
+    float y = frac(hash1(float2(floor(frame * 0.2), seed + 88.0)) + signed_hash(float2(seed, frame)) * 0.04);
+    float wave = sin((luv.x * 15.0 + frame * 0.04 + seed) * (0.7 + falloff)) * 0.018 * strength;
+    float fiber = line_mask(luv.y, y + wave, 0.0018 + 0.010 * softness);
+    float segment = gate(hash1(float2(floor(luv.x * 18.0), floor(frame * 0.4) + seed)), 0.28, 0.12);
+    float active = gate(hash1(float2(floor(frame * 0.08), seed + 99.0)), 0.78 - strength * 0.28, 0.05);
+    return fiber * segment * active;
+}
+
+float film_dust_blob(float2 luv, float2 px, float frame, float strength)
+{
+    float cell_px = max(4.0, scale * 6.0);
+    float2 cell = floor((px + noiseOffset) / cell_px);
+    float2 local = frac((px + noiseOffset) / cell_px) - 0.5;
+    float roundness = length(local * float2(1.0 + signed_hash(cell) * 0.45, 1.0));
+    float blob = 1.0 - smoothstep(0.04, 0.22 + softness * 0.42, roundness);
+    float persistent = gate(hash1(cell + float2(seed, floor(frame * 0.05))), 0.83 - strength * 0.32, 0.035 + softness * 0.05);
+    float sparkle = gate(hash1(cell + float2(floor(frame * 0.9), seed)), 0.57, 0.18);
+    return blob * persistent * sparkle;
+}
+
+float film_blotch(float2 luv, float frame, float strength)
+{
+    float2 stain_pos = float2(hash1(float2(floor(frame * 0.06), seed + 3.0)),
+                              hash1(float2(seed + 4.0, floor(frame * 0.07))));
+    float2 d = (luv - stain_pos) * float2(1.0, 1.35);
+    float shape = 1.0 - smoothstep(0.035, 0.28 + falloff * 0.22, length(d));
+    float edge = organic_noise(luv * (18.0 + complexity * 3.0) + frame * 0.05, 4.0);
+    float active = gate(hash1(float2(floor(frame * 0.05), seed + 37.0)), 0.86 - strength * 0.20, 0.05);
+    return shape * gate(edge, 0.38, 0.22) * active;
+}
+
+float4 composite_film(VertDataOut v_in, float2 luv, float2 px, float strength)
+{
+    float phase = phase_value();
+    float frame = floor(phase * 18.0);
+    float weave_x = signed_hash(float2(frame, seed)) * (0.0025 + 0.015 * falloff) * strength;
+    float weave_y = signed_hash(float2(frame + 19.0, seed)) * (0.0015 + 0.006 * falloff) * strength;
+    float flutter = sin((luv.y * (7.0 + complexity * 1.3) + phase * 6.28318)) * 0.0025 * strength;
+    float4 src = sample_premul(v_in.uv + float2(weave_x + flutter, weave_y));
+    float alpha = src.a;
+    float3 rgb = straight_rgb(src);
+
+    float4 artifact = sample_artifact_texture(luv, px, frame, float2(0.0, 0.0));
+    float scratches = artifact.r * 0.55;
+    scratches += film_vertical_scratch(luv, px, frame, 2.0, strength);
+    scratches += film_vertical_scratch(luv, px, frame, 7.0, strength) * 0.7;
+    scratches += film_vertical_scratch(luv, px, frame, 13.0, strength) * 0.45;
+    scratches = saturate(scratches);
+    float fiber = film_hair_fiber(luv, px, frame, strength);
+    float dust = saturate(film_dust_blob(luv, px, frame, strength) + artifact.g * artifact.a * 0.75);
+    float blotch = saturate(film_blotch(luv, frame, strength) + artifact.b * artifact.a * 0.55);
+    float emulsion_grain = (organic_noise(px / max(1.0, scale * 1.25) + frame * 0.17, 4.0) - 0.5) * 0.25 * strength;
+    float flicker = signed_hash(float2(frame, seed + 19.0)) * 0.20 * strength +
+                    sin(phase * 6.28318 * 0.71 + seed) * 0.045 * strength;
+    float vignette = smoothstep(0.24, 0.92, distance(luv, float2(0.5, 0.5)));
+
+    rgb *= 1.0 + flicker;
+    rgb += emulsion_grain;
+    rgb = lerp(rgb, rgb * (0.78 - vignette * 0.18), strength * vignette * 0.45);
+    rgb = lerp(rgb, effectColor.rgb, scratches * strength * (0.55 + softness * 0.35));
+    rgb = lerp(rgb, float3(0.02, 0.015, 0.01), dust * strength * (0.55 + falloff * 0.25));
+    rgb = lerp(rgb, effectColor.rgb * 0.86, fiber * strength * 0.35);
+    rgb = lerp(rgb, secondaryColor.rgb, blotch * strength * 0.38);
+    rgb = color_correct(rgb, strength);
+    return premul_from_rgb(rgb, alpha);
+}
+
+float2 analog_yiq(float3 rgb)
+{
+    return float2(dot(rgb, float3(0.596, -0.274, -0.322)),
+                  dot(rgb, float3(0.211, -0.523, 0.312)));
+}
+
+float3 analog_from_yiq(float y, float2 iq)
+{
+    return float3(y + 0.956 * iq.x + 0.621 * iq.y,
+                  y - 0.272 * iq.x - 0.647 * iq.y,
+                  y - 1.106 * iq.x + 1.703 * iq.y);
+}
+
+float analog_dropout(float2 px, float frame, float strength)
+{
+    float row_h = max(2.0, scale * (0.42 + softness));
+    float row = floor(px.y / row_h);
+    float bands = gate(hash1(float2(row, floor(frame * 0.72) + seed)), 0.74 - strength * 0.34, 0.02 + softness * 0.08);
+    float breakup = gate(hash1(float2(floor(px.x / max(16.0, scale * 8.0)), row + frame)), 0.46, 0.22);
+    return bands * breakup;
+}
+
+float tracking_band(float2 luv, float2 px, float frame, float strength)
+{
+    float bottom = smoothstep(0.76, 1.0, luv.y);
+    float head = sin((luv.y * 80.0 + frame * 0.8 + seed) * 0.42) * 0.5 + 0.5;
+    float random_bands = gate(hash1(float2(floor(px.y / max(3.0, scale * 0.7)), frame + seed)), 0.80 - strength * 0.30, 0.035 + softness * 0.08);
+    return saturate(bottom * head * strength + random_bands * strength * 0.65);
+}
+
+/* legacy token: scan; analog path still renders scanlines/interlacing/chroma */
+float4 composite_analog(VertDataOut v_in, float2 luv, float2 px, float strength)
+{
+    float phase = phase_value();
+    float frame = floor(phase * 29.97);
+    float4 artifact = sample_artifact_texture(luv, px, frame, float2(0.23, 0.41));
+    float row = floor(px.y / max(2.0, scale * 0.45));
+    float sync = saturate(gate(hash1(float2(row, floor(frame * 0.7) + seed)), 0.78 - strength * 0.36, 0.025 + softness * 0.08) + artifact.r * artifact.a * 0.65);
+    float fine_wobble = sin(luv.y * (18.0 + complexity * 3.0) + phase * 6.28318) * (0.0015 + 0.006 * strength);
+    float slow_wobble = sin(luv.y * (3.2 + falloff * 6.0) + phase * 2.2 + seed) * (0.002 + 0.012 * strength);
+    float head_switch = tracking_band(luv, px, frame, strength) * (0.012 + 0.065 * strength);
+    float tear = signed_hash(float2(row, frame + seed * 3.0)) * sync * (0.004 + 0.060 * strength);
+    float2 warped = v_in.uv + float2(fine_wobble + slow_wobble + tear + head_switch, 0.0);
+
+    float chroma = (0.0015 + 0.010 * falloff + 0.002 * softness) * strength;
+    float4 y_src = sample_premul(warped);
+    float3 y_rgb = straight_rgb(y_src);
+    float y = dot(y_rgb, float3(0.299, 0.587, 0.114));
+    float3 c_left = straight_rgb(sample_premul(warped - float2(chroma * 1.8, 0.0)));
+    float3 c_right = straight_rgb(sample_premul(warped + float2(chroma * 1.8, 0.0)));
+    float2 iq = (analog_yiq(c_left) + analog_yiq(c_right)) * 0.5;
+    float3 rgb = analog_from_yiq(y, iq);
+
+    float scanline = 0.84 + 0.16 * sin(px.y * 3.14159265);
+    float interlace = (frac((px.y + floor(frame)) * 0.5) < 0.5) ? 0.92 : 1.04;
+    float dropout = saturate(analog_dropout(px, frame, strength) + artifact.g * artifact.a * 0.85);
+    float static_fine = ((artifact.b - 0.5) * 0.55 + (grain_hash(px * float2(0.73, 0.91) + frame + seed) - 0.5) * 0.32) * strength;
+    float chroma_crawl = (sin(px.x * 0.19 + frame * 0.75 + seed) * 0.035 + (artifact.r - artifact.b) * 0.045) * strength;
+
+    rgb *= lerp(1.0, scanline * interlace, saturate(strength * 0.95 + softness * 0.5));
+    rgb.r += chroma_crawl;
+    rgb.b -= chroma_crawl * 0.75;
+    rgb += static_fine;
+    rgb = lerp(rgb, secondaryColor.rgb, dropout * strength * 0.28);
+    rgb -= dropout * strength * 0.28;
+    rgb = color_correct(rgb, strength);
+    return premul_from_rgb(rgb, y_src.a);
+}
+
+/* legacy token: macroblock; macroblock compression artifact selector */
+float digital_block_mask(float2 block, float frame, float strength)
+{
+    float a = gate(hash1(block + float2(frame, seed)), 0.68 - strength * 0.32, 0.025 + softness * 0.08);
+    float b = gate(hash1(float2(block.y, floor(frame * 0.37) + seed)), 0.80 - strength * 0.22, 0.04);
+    return saturate(max(a, b * 0.75));
+}
+
+float3 digital_ringing(float2 uv, float2 luv, float2 block_count, float strength)
+{
+    float2 step_uv = abs(layerUvAxisX) / max(block_count.x, 1.0) + abs(layerUvAxisY) / max(block_count.y, 1.0);
+    float3 c0 = straight_rgb(sample_premul(uv));
+    float3 cx1 = straight_rgb(sample_premul(uv + float2(step_uv.x, 0.0)));
+    float3 cx2 = straight_rgb(sample_premul(uv - float2(step_uv.x, 0.0)));
+    float3 cy1 = straight_rgb(sample_premul(uv + float2(0.0, step_uv.y)));
+    float3 cy2 = straight_rgb(sample_premul(uv - float2(0.0, step_uv.y)));
+    float3 edge = c0 * 4.0 - cx1 - cx2 - cy1 - cy2;
+    return edge * (0.10 + 0.35 * falloff) * strength;
+}
+
+float4 composite_digital(VertDataOut v_in, float2 luv, float2 px, float strength)
+{
+    float phase = phase_value();
+    float frame = floor(phase * 18.0);
+    float4 artifact = sample_artifact_texture(luv, px, frame, float2(0.61, 0.17));
+    float block_px = max(4.0, scale * (0.7 + softness * 1.8));
+    float2 block_count = max(float2(4.0, 4.0), layerPixelSize / block_px);
+    float2 block = floor(luv * block_count + noiseOffset * 0.001);
+    float2 block_local = frac(luv * block_count + noiseOffset * 0.001);
+    float glitch = saturate(digital_block_mask(block, frame, strength) + artifact.r * artifact.a * 0.95);
+    float row = floor(px.y / max(4.0, block_px * 0.75));
+    float row_glitch = saturate(gate(hash1(float2(row, floor(frame * 0.63) + seed * 5.0)), 0.78 - strength * 0.26, 0.025 + softness * 0.06) + artifact.g * artifact.a * 0.75);
+    float2 packet_jump = float2(signed_hash(block + float2(seed, frame)) * 0.040,
+                                signed_hash(block + float2(frame, seed)) * 0.015) * strength * max(glitch, row_glitch);
+    packet_jump.x += signed_hash(float2(row, frame + seed)) * row_glitch * 0.055 * strength;
+
+    float4 src = sample_premul(v_in.uv + packet_jump);
+    float alpha = src.a;
+    float3 rgb = straight_rgb(src);
+    float2 center_luv = (block + 0.5) / block_count;
+    float2 block_uv = texture_uv_from_layer_uv(center_luv);
+    float3 block_rgb = straight_rgb(sample_premul(block_uv + packet_jump * 0.35));
+    float block_mix = max(glitch, row_glitch) * saturate(0.32 + strength * 0.55);
+    rgb = lerp(rgb, block_rgb, block_mix);
+
+    float quant_levels = max(3.0, lerp(96.0, 5.0, saturate(strength * (0.72 + falloff * 0.75))));
+    rgb = floor(rgb * quant_levels + 0.5) / quant_levels;
+    float block_edge = max(smoothstep(0.0, 0.10, block_local.x) * (1.0 - smoothstep(0.88, 1.0, block_local.x)),
+                           smoothstep(0.0, 0.10, block_local.y) * (1.0 - smoothstep(0.88, 1.0, block_local.y)));
+    float edge_line = (1.0 - block_edge) * glitch * strength * 0.18;
+    rgb += digital_ringing(v_in.uv + packet_jump, luv, block_count, strength) * max(glitch, row_glitch);
+    rgb -= edge_line;
+
+    float packet = saturate(gate(hash1(block + float2(seed * 2.0, frame * 7.0)), 0.86 - strength * 0.28, 0.018 + softness * 0.06) + artifact.b * artifact.a * 0.85);
+    float sparkle = ((artifact.r + artifact.g + artifact.b) / 3.0 - 0.5 + signed_hash(px * 0.37 + float2(frame, seed)) * 0.5) * packet * strength * 0.24;
+    rgb += sparkle;
+    rgb = lerp(rgb, effectColor.rgb, packet * strength * 0.28);
+    rgb = lerp(rgb, secondaryColor.rgb, glitch * strength * 0.12);
+    rgb = color_correct(rgb, strength);
+    return premul_from_rgb(rgb, alpha);
+}
+
+float4 PSDamage(VertDataOut v_in) : TARGET
+{
+    float2 luv = layer_space_uv(v_in.uv);
+    float2 px = luv * max(layerPixelSize, float2(1.0, 1.0));
+    float strength = saturate(amount * opacity);
+    int p = damageProfile;
+    if (p < 0)
+        p = profile >= 10 ? 2 : (profile >= 9 ? 1 : 0);
+    if (p == 1)
+        return composite_analog(v_in, luv, px, strength);
+    if (p == 2)
+        return composite_digital(v_in, luv, px, strength);
+    return composite_film(v_in, luv, px, strength);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSDamage(v_in);
+    }
+}

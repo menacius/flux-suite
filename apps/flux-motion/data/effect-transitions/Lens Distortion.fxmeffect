@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "lens-distortion",
+  "name": "Lens Distortion",
+  "type": "lens-distortion",
+  "category": "Effects/Distortion"
+}

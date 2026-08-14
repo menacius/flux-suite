@@ -1,0 +1,50 @@
+# Ordered implementation fragments for formerly monolithic translation units.
+# Included by facade files and listed here for IDEs, source packages, and audits.
+set(OBS_FXM_IMPLEMENTATION_MODULES
+    src/cache/cache-manager/cache-policy-invalidation.inc
+    src/cache/cache-manager/disk-cache-storage.inc
+    src/cache/cache-manager/live-cue-queueing.inc
+    src/cache/cache-manager/live-cue-state.inc
+    src/cache/cache-manager/visual-hash-keying.inc
+    src/cache/cache-manager/worker-publication.inc
+    src/canvas/canvas-preview/canvas-overlay-paint.inc
+    src/canvas/canvas-preview/geometry-selection.inc
+    src/canvas/canvas-preview/spatial-bezier-keyframes.inc
+    src/canvas/canvas-preview/gpu-frame-rendering.inc
+    src/canvas/canvas-preview/keyboard-wheel-events.inc
+    src/canvas/canvas-preview/path-gradient-tools.inc
+    src/canvas/canvas-preview/pointer-events.inc
+    src/canvas/canvas-preview/preview-cache-view.inc
+    src/canvas/canvas-preview/transform-snap.inc
+    src/editor/properties-panel/auto-style-and-property-actions.inc
+    src/editor/properties-panel/color-gradient-editing.inc
+    src/editor/properties-panel/construction-gradient-image-signals.inc
+    src/editor/properties-panel/construction-transform-character.inc
+    src/editor/properties-panel/construction-type-live-shape.inc
+    src/editor/properties-panel/popup-state.inc
+    src/editor/properties-panel/property-synchronization.inc
+    src/editor/properties-panel/selection-refresh.inc
+    src/editor/title-dock/collapsible-titles.inc
+    src/editor/title-dock/dock-lifecycle.inc
+    src/editor/title-dock/dock-ui.inc
+    src/editor/title-dock/import-export-helpers.inc
+    src/editor/title-dock/list-selection-cues.inc
+    src/editor/title-dock/live-text-cache-playlist.inc
+    src/editor/title-dock/template-library-helpers.inc
+    src/editor/title-dock/title-actions.inc
+    src/editor/title-editor-internal/canvas-rendering-helpers.inc
+    src/editor/title-editor-internal/hierarchy-model.inc
+    src/editor/title-editor-internal/rich-text-color-utils.inc
+    src/editor/title-editor-internal/rich-text-model-adapters.inc
+    src/editor/title-editor-internal/text-layout-rendering.inc
+    src/editor/title-editor-internal/widget-property-helpers.inc
+    src/editor/title-editor/commands-docks.inc
+    src/editor/title-editor/document-shape-editing.inc
+    src/editor/title-editor/editor-events.inc
+    src/editor/title-editor/layout-template-tools.inc
+    src/editor/title-editor/panels-colors.inc
+    src/editor/title-editor/playback-cache-preferences.inc
+    src/editor/title-editor/signal-handlers.inc
+    src/editor/title-editor/ui-construction.inc
+    src/editor/title-editor/window-session.inc
+)

@@ -1,0 +1,44 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d blurredImage;
+uniform float2 texelSize;
+uniform float4 effectColor;
+uniform float4 secondaryColor;
+uniform float opacity;
+uniform float amount;
+uniform float radius;
+uniform float shadowLength;
+uniform float angle;
+uniform float softness;
+uniform float intensity;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v_in) { VertDataOut o; o.pos = mul(float4(v_in.pos.xyz,1.0), ViewProj); o.uv=v_in.uv; return o; }
+float4 glare_sample(float2 uv) { return blurredImage.Sample(textureSampler, uv); }
+float4 PSGlare(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float radians = angle * 0.01745329252;
+    float2 axis = float2(cos(radians), sin(radians));
+    float2 perpendicular = float2(-axis.y, axis.x);
+    float length_pixels = max(shadowLength, max(radius, 1.0));
+    float2 d = axis * texelSize * length_pixels * 0.125;
+    float2 p = perpendicular * texelSize * max(radius, 1.0) * 0.18;
+    float4 streak = glare_sample(v_in.uv) * 0.22;
+    streak += (glare_sample(v_in.uv + d) + glare_sample(v_in.uv - d)) * 0.14;
+    streak += (glare_sample(v_in.uv + d * 2.0) + glare_sample(v_in.uv - d * 2.0)) * 0.10;
+    streak += (glare_sample(v_in.uv + d * 4.0) + glare_sample(v_in.uv - d * 4.0)) * 0.065;
+    streak += (glare_sample(v_in.uv + d * 8.0) + glare_sample(v_in.uv - d * 8.0)) * 0.035;
+    float4 cross_streak = (glare_sample(v_in.uv + p) + glare_sample(v_in.uv - p)) * 0.10;
+    float chroma = saturate(softness);
+    float3 optical = streak.rgb * effectColor.rgb;
+    optical += cross_streak.rgb * secondaryColor.rgb * (0.35 + chroma * 0.65);
+    float gain = max(amount, 0.0) * max(intensity, 0.0) * clamp(opacity, 0.0, 1.0);
+    float3 output_rgb = base.rgb + optical * gain;
+    float output_alpha = saturate(base.a + max(streak.a, cross_streak.a) * gain * (1.0 - base.a));
+    return float4(output_rgb, output_alpha);
+}
+technique GlareComposite { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSGlare(v_in); } }
+technique Draw { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSGlare(v_in); } }

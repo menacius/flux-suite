@@ -1,0 +1,30 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "analog-distortion",
+  "name": "Analog Distortion",
+  "category": [
+    "Effects",
+    "Distortion",
+    "Damage"
+  ],
+  "type": "analog-distortion",
+  "parameters": {
+    "profile": 9,
+    "amount": 0.56,
+    "scale": 8.0,
+    "softness": 0.18,
+    "complexity": 6.0,
+    "spread": 2.2,
+    "falloff": 0.65,
+    "speed": 1.0,
+    "evolution": 0.0,
+    "seed": 29,
+    "animated": true,
+    "monochrome": false,
+    "color": "#ffffff",
+    "temporalStability": true,
+    "secondaryColor": "#73a8ff"
+  }
+}

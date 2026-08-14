@@ -1,0 +1,120 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float opacity;
+uniform float amount;
+uniform float scale;
+uniform float softness;
+uniform float complexity;
+uniform float evolution;
+uniform float seed;
+uniform int invert;
+
+sampler_state textureSampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float2 layer_space_uv(float2 surface_uv)
+{
+    float2 delta = surface_uv - layerUvOrigin;
+    float determinant = layerUvAxisX.x * layerUvAxisY.y -
+                        layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(determinant) <= 0.0000001) {
+        float2 extent = max(abs(layerUvRect.zw), float2(0.000001, 0.000001));
+        return (surface_uv - layerUvRect.xy) / extent;
+    }
+    return float2(
+        (delta.x * layerUvAxisY.y - delta.y * layerUvAxisY.x) / determinant,
+        (layerUvAxisX.x * delta.y - layerUvAxisX.y * delta.x) / determinant);
+}
+
+float rough_hash(float2 p)
+{
+    return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+float rough_value(float2 p)
+{
+    float2 cell = floor(p);
+    float2 f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = rough_hash(cell);
+    float b = rough_hash(cell + float2(1.0, 0.0));
+    float c = rough_hash(cell + float2(0.0, 1.0));
+    float d = rough_hash(cell + float2(1.0, 1.0));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+float rough_layers(float2 p, float layers)
+{
+    float value = rough_value(p) * 0.60;
+    value += rough_value(p * 2.03 + 19.0) * 0.27 * step(1.5, layers);
+    value += rough_value(p * 4.11 + 37.0) * 0.13 * step(2.5, layers);
+    return value;
+}
+
+float4 PSRoughen(VertDataOut v_in) : TARGET
+{
+    float4 original = image.Sample(textureSampler, v_in.uv);
+    float2 effect_uv = layer_space_uv(v_in.uv);
+    float2 p = effect_uv * max(scale, 0.001) +
+               float2(evolution + seed * 3.1, evolution * 0.73 + seed * 7.7);
+    float n1 = rough_layers(p, clamp(complexity, 1.0, 3.0)) - 0.5;
+    float n2 = rough_layers(p + float2(41.7, 23.9), clamp(complexity, 1.0, 3.0)) - 0.5;
+    if (invert != 0) {
+        n1 = -n1;
+        n2 = -n2;
+    }
+
+    float displacement = max(amount, 0.0) * 64.0;
+    float2 offset = float2(n1, n2) * texelSize * displacement;
+    float4 displaced = image.Sample(textureSampler, v_in.uv + offset);
+
+    float a0 = original.a;
+    float a1 = image.Sample(textureSampler, v_in.uv + float2(texelSize.x, 0.0)).a;
+    float a2 = image.Sample(textureSampler, v_in.uv - float2(texelSize.x, 0.0)).a;
+    float a3 = image.Sample(textureSampler, v_in.uv + float2(0.0, texelSize.y)).a;
+    float a4 = image.Sample(textureSampler, v_in.uv - float2(0.0, texelSize.y)).a;
+    float edge = max(max(abs(a0 - a1), abs(a0 - a2)), max(abs(a0 - a3), abs(a0 - a4)));
+    float edge_mask = smoothstep(0.0, max(softness, 0.001), edge + abs(n1) * max(amount, 0.0));
+    float keep = saturate(1.0 - edge_mask * max(amount, 0.0));
+    float old_alpha = displaced.a;
+    displaced.a *= keep;
+    if (old_alpha > 0.0001)
+        displaced.rgb *= displaced.a / old_alpha;
+    return lerp(original, displaced, clamp(opacity, 0.0, 1.0));
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSRoughen(v_in);
+    }
+}

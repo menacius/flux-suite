@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "luma-key",
+  "name": "Luma Key",
+  "type": "luma-key",
+  "category": "Effects/Keying & Matte"
+}

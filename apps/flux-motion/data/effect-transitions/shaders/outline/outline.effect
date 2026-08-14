@@ -1,0 +1,60 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float4 effectColor;
+uniform float width;
+uniform float opacity;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float4 PSOutline(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float r = clamp(width, 0.0, 96.0);
+    float2 s = texelSize * max(1.0, r);
+    float expanded = base.a;
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2( s.x, 0.0)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2(-s.x, 0.0)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2(0.0,  s.y)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2(0.0, -s.y)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2( s.x,  s.y)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2(-s.x,  s.y)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2( s.x, -s.y)).a);
+    expanded = max(expanded, image.Sample(textureSampler, v_in.uv + float2(-s.x, -s.y)).a);
+
+    float outline_a = clamp((expanded - base.a) * opacity * effectColor.a, 0.0, 1.0);
+    float4 outline = float4(effectColor.rgb * outline_a, outline_a);
+    float inv_base = 1.0 - base.a;
+    return float4(base.rgb + outline.rgb * inv_base, base.a + outline.a * inv_base);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSOutline(v_in);
+    }
+}

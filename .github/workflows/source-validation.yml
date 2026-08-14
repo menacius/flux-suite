@@ -1,0 +1,16 @@
+name: Source validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  layout:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate repository layout
+        shell: pwsh
+        run: ./scripts/development/validate-layout.ps1
+      - name: Configure workspace
+        run: cmake -S . -B out/build/workspace

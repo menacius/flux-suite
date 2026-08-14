@@ -1,0 +1,187 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d sourceImage;
+uniform float2 texelSize;
+uniform float2 sourceTexelSize;
+uniform float4 effectColor;
+uniform float opacity;
+uniform float radius;
+uniform float amount;
+uniform float distance;
+uniform float spread;
+uniform float falloff;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform int sourceEnabled;
+uniform int sourceIsComposition;
+uniform int xChannel;
+uniform int yChannel;
+uniform int wrapMode;
+uniform int mappingSpace;
+uniform int alphaAware;
+uniform int inputIsComposition;
+
+sampler_state linearSampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut o;
+    o.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    o.uv = v_in.uv;
+    return o;
+}
+
+float source_luma(float3 value)
+{
+    return dot(value, float3(0.2126, 0.7152, 0.0722));
+}
+
+float3 source_straight(float4 value)
+{
+    return value.a > 0.00001 ? value.rgb / value.a : float3(0.0, 0.0, 0.0);
+}
+
+float2 composition_uv(float2 local_uv)
+{
+    if (inputIsComposition != 0)
+        return local_uv;
+    return layerUvOrigin + layerUvAxisX * local_uv.x +
+           layerUvAxisY * local_uv.y;
+}
+
+float2 source_space_uv(float2 input_uv)
+{
+    if (inputIsComposition == 0)
+        return input_uv;
+    float2 delta = input_uv - layerUvOrigin;
+    float determinant = layerUvAxisX.x * layerUvAxisY.y -
+                        layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(determinant) <= 0.0000001)
+        return input_uv;
+    return float2(
+        (delta.x * layerUvAxisY.y - delta.y * layerUvAxisY.x) / determinant,
+        (layerUvAxisX.x * delta.y - layerUvAxisX.y * delta.x) / determinant);
+}
+
+float source_channel(float4 value, int channel)
+{
+    float3 straight_value = source_straight(value);
+    if (channel == 1) return straight_value.r;
+    if (channel == 2) return straight_value.g;
+    if (channel == 3) return straight_value.b;
+    if (channel == 4) return value.a;
+    return source_luma(straight_value);
+}
+
+float mirror_coordinate(float value)
+{
+    float tile = floor(value);
+    float local_value = frac(value);
+    float parity = step(1.0, frac(abs(tile) * 0.5) * 2.0);
+    return lerp(local_value, 1.0 - local_value, parity);
+}
+
+float2 wrapped_uv(float2 uv)
+{
+    if (wrapMode == 1)
+        return frac(uv);
+    if (wrapMode == 2)
+        return float2(mirror_coordinate(uv.x), mirror_coordinate(uv.y));
+    return clamp(uv, float2(0.0, 0.0), float2(1.0, 1.0));
+}
+
+float uv_inside(float2 uv)
+{
+    return step(0.0, uv.x) * step(uv.x, 1.0) *
+           step(0.0, uv.y) * step(uv.y, 1.0);
+}
+
+float4 PSDisplacementMap(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(linearSampler, v_in.uv);
+    if (sourceEnabled == 0)
+        return base;
+
+    float2 source_uv = sourceIsComposition != 0
+        ? composition_uv(v_in.uv) : source_space_uv(v_in.uv);
+    float4 map_value = sourceImage.Sample(linearSampler, source_uv);
+    float dx = source_channel(map_value, xChannel) - 0.5;
+    float dy = source_channel(map_value, yChannel) - 0.5;
+    float2 displaced_uv = v_in.uv + float2(
+        dx * amount * texelSize.x,
+        dy * distance * texelSize.y);
+    float valid = wrapMode == 3 ? uv_inside(displaced_uv) : 1.0;
+    float4 displaced = image.Sample(linearSampler, wrapped_uv(displaced_uv));
+    displaced *= valid;
+    return lerp(base, displaced, saturate(opacity));
+}
+
+float4 PSLightWrap(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(linearSampler, v_in.uv);
+    if (sourceEnabled == 0 || base.a <= 0.00001)
+        return base;
+
+    float2 background_uv = sourceIsComposition != 0
+        ? composition_uv(v_in.uv) : v_in.uv;
+    float2 bg_step = sourceTexelSize * max(radius, 0.0);
+    float4 background = sourceImage.Sample(linearSampler, background_uv);
+    background += sourceImage.Sample(linearSampler, background_uv + float2(bg_step.x, 0.0));
+    background += sourceImage.Sample(linearSampler, background_uv - float2(bg_step.x, 0.0));
+    background += sourceImage.Sample(linearSampler, background_uv + float2(0.0, bg_step.y));
+    background += sourceImage.Sample(linearSampler, background_uv - float2(0.0, bg_step.y));
+    background += sourceImage.Sample(linearSampler, background_uv + bg_step);
+    background += sourceImage.Sample(linearSampler, background_uv - bg_step);
+    background += sourceImage.Sample(linearSampler, background_uv + float2(bg_step.x, -bg_step.y));
+    background += sourceImage.Sample(linearSampler, background_uv + float2(-bg_step.x, bg_step.y));
+    background /= 9.0;
+
+    float2 edge_step = texelSize * max(spread, 1.0);
+    float min_alpha = base.a;
+    min_alpha = min(min_alpha, image.Sample(linearSampler, v_in.uv + float2(edge_step.x, 0.0)).a);
+    min_alpha = min(min_alpha, image.Sample(linearSampler, v_in.uv - float2(edge_step.x, 0.0)).a);
+    min_alpha = min(min_alpha, image.Sample(linearSampler, v_in.uv + float2(0.0, edge_step.y)).a);
+    min_alpha = min(min_alpha, image.Sample(linearSampler, v_in.uv - float2(0.0, edge_step.y)).a);
+    min_alpha = min(min_alpha, image.Sample(linearSampler, v_in.uv + edge_step).a);
+    min_alpha = min(min_alpha, image.Sample(linearSampler, v_in.uv - edge_step).a);
+
+    float3 base_straight = source_straight(base);
+    float luminance_edge = saturate(abs(source_luma(base_straight) -
+        source_luma(source_straight(image.Sample(
+            linearSampler, v_in.uv + float2(edge_step.x, 0.0))))));
+    float alpha_edge = base.a * saturate(1.0 - min_alpha);
+    float edge = alphaAware != 0 ? alpha_edge : max(alpha_edge, luminance_edge);
+    float protection = saturate(1.0 - source_luma(base_straight) * saturate(falloff));
+    float mix_amount = saturate(edge * max(amount, 0.0) *
+                                saturate(opacity) * protection);
+
+    float3 background_straight = source_straight(background);
+    float3 tinted_spill = lerp(background_straight,
+                               background_straight * effectColor.rgb,
+                               saturate(effectColor.a));
+    float3 result_straight = lerp(base_straight, tinted_spill, mix_amount);
+    return float4(result_straight * base.a, base.a);
+}
+
+technique LightWrap
+{
+    pass { vertex_shader = VSDefault(v_in); pixel_shader = PSLightWrap(v_in); }
+}
+
+technique DisplacementMap
+{
+    pass { vertex_shader = VSDefault(v_in); pixel_shader = PSDisplacementMap(v_in); }
+}
+
+technique Draw
+{
+    pass { vertex_shader = VSDefault(v_in); pixel_shader = PSDisplacementMap(v_in); }
+}

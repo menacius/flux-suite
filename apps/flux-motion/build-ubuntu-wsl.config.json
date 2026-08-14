@@ -1,0 +1,15 @@
+{
+  "DistroName": "Ubuntu-24.04",
+  "ExpectedUbuntuVersion": "24.04",
+  "MaximumGlibcVersion": "2.39",
+  "BuildType": "Release",
+  "BuildTests": false,
+  "InstallDependencies": true,
+  "Workspace": "/root/.cache/flux-motion/obs-linux-ubuntu-24.04",
+  "PackageName": "Flux_Motion",
+  "PackagePlatform": "",
+  "PackageOutputDirectory": "build",
+  "ArchiveFormat": "both",
+  "InstallIntoWslObs": false,
+  "WslObsPluginDirectory": "/root/.config/obs-studio/plugins"
+}

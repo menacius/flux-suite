@@ -1,0 +1,146 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d hardMask;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float2 point1;
+uniform float4 color1;
+uniform float2 point2;
+uniform float4 color2;
+uniform float2 point3;
+uniform float4 color3;
+uniform float2 point4;
+uniform float4 color4;
+uniform float blend;
+uniform float jitter;
+uniform float opacity;
+uniform int blendMode;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float2 layer_space_uv(float2 surface_uv)
+{
+    float2 delta = surface_uv - layerUvOrigin;
+    float determinant = layerUvAxisX.x * layerUvAxisY.y -
+                        layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(determinant) <= 0.0000001) {
+        float2 extent = max(abs(layerUvRect.zw), float2(0.000001, 0.000001));
+        return (surface_uv - layerUvRect.xy) / extent;
+    }
+    return float2(
+        (delta.x * layerUvAxisY.y - delta.y * layerUvAxisY.x) / determinant,
+        (layerUvAxisX.x * delta.y - layerUvAxisX.y * delta.x) / determinant);
+}
+
+float random_value(float2 p)
+{
+    return frac(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453);
+}
+
+float point_weight(float2 uv, float2 center, float exponent)
+{
+    float distanceSquared = max(dot(uv - center, uv - center), 0.000001);
+    return 1.0 / pow(distanceSquared, exponent * 0.5);
+}
+
+float3 overlay_blend(float3 base, float3 source)
+{
+    float3 low = 2.0 * base * source;
+    float3 high = 1.0 - 2.0 * (1.0 - base) * (1.0 - source);
+    return lerp(low, high, step(float3(0.5, 0.5, 0.5), base));
+}
+
+float luminance(float3 value)
+{
+    return dot(value, float3(0.2126, 0.7152, 0.0722));
+}
+
+float3 blend_rgb(float3 base, float3 source, int mode)
+{
+    if (mode == 1)
+        return base * source;
+    if (mode == 2)
+        return min(base + source, float3(1.0, 1.0, 1.0));
+    if (mode == 3)
+        return 1.0 - (1.0 - base) * (1.0 - source);
+    if (mode == 4)
+        return overlay_blend(base, source);
+    if (mode == 5) {
+        float sourceLuma = max(luminance(source), 0.0001);
+        return clamp(source * (luminance(base) / sourceLuma), 0.0, 1.0);
+    }
+    return source;
+}
+
+float4 PSFourColorGradient(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float2 effect_uv = layer_space_uv(v_in.uv);
+    /* AE-style Blend: higher values produce broader, more gradual transitions. */
+    float normalizedBlend = clamp(blend / 1000.0, 0.0, 1.0);
+    float exponent = lerp(8.0, 0.65, normalizedBlend);
+    float w1 = point_weight(effect_uv, point1, exponent);
+    float w2 = point_weight(effect_uv, point2, exponent);
+    float w3 = point_weight(effect_uv, point3, exponent);
+    float w4 = point_weight(effect_uv, point4, exponent);
+    float total = max(w1 + w2 + w3 + w4, 0.000001);
+    float4 gradient = (color1 * w1 + color2 * w2 + color3 * w3 + color4 * w4) / total;
+
+    /* Jitter is a small output dither intended to break visible banding rather
+     * than move the four source points. */
+    float noise = (random_value(effect_uv * 8192.0) - 0.5) *
+                  clamp(jitter, 0.0, 100.0) / (100.0 * 127.5);
+    gradient.rgb = clamp(gradient.rgb + noise, 0.0, 1.0);
+
+    /* Generate the color field across the render surface, but use the
+     * untouched layer artwork as a hard matte.  Pixels introduced by earlier
+     * effects (shadow/glow/etc.) remain unchanged, while text glyphs, image
+     * transparency, shapes, and group child composites receive the gradient. */
+    float artworkAlpha = hardMask.Sample(textureSampler, v_in.uv).a;
+    if (base.a <= 0.0001 || artworkAlpha <= 0.0001)
+        return base;
+
+    float effectMix = clamp(gradient.a * opacity, 0.0, 1.0);
+    float matteShare = clamp(artworkAlpha / max(base.a, 0.0001), 0.0, 1.0);
+    float mixAmount = effectMix * matteShare;
+    float3 baseStraight = clamp(base.rgb / base.a, 0.0, 1.0);
+    float3 blended = blend_rgb(baseStraight, gradient.rgb, blendMode);
+    float3 outputStraight = lerp(baseStraight, blended, mixAmount);
+    float outputAlpha = base.a;
+    float3 outputRgb = outputStraight * outputAlpha;
+    return float4(clamp(outputRgb, 0.0, outputAlpha), outputAlpha);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSFourColorGradient(v_in);
+    }
+}

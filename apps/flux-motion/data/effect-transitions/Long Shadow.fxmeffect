@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "long-shadow",
+  "name": "Long Shadow",
+  "type": "long-shadow",
+  "category": "Effects/Perspective"
+}

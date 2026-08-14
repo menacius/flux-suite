@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "inner-shadow",
+  "name": "Inner Shadow",
+  "type": "inner-shadow",
+  "category": "Effects/Stylize"
+}

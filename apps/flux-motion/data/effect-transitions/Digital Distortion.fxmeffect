@@ -1,0 +1,30 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "digital-distortion",
+  "name": "Digital Distortion",
+  "category": [
+    "Effects",
+    "Distortion",
+    "Damage"
+  ],
+  "type": "digital-distortion",
+  "parameters": {
+    "profile": 10,
+    "amount": 0.52,
+    "scale": 20.0,
+    "softness": 0.09,
+    "complexity": 5.0,
+    "spread": 2.0,
+    "falloff": 0.62,
+    "speed": 1.0,
+    "evolution": 0.0,
+    "seed": 43,
+    "animated": true,
+    "monochrome": false,
+    "color": "#ffffff",
+    "temporalStability": true,
+    "secondaryColor": "#8dffec"
+  }
+}

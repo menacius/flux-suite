@@ -1,0 +1,10 @@
+{
+  "name": "flux-motion-deps",
+  "version-string": "0.8.19-alpha",
+  "dependencies": [
+    "cairo",
+    "pango",
+    "lz4",
+    "ffmpeg"
+  ]
+}

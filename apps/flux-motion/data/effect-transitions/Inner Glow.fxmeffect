@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "inner-glow",
+  "name": "Inner Glow",
+  "type": "inner-glow",
+  "category": "Effects/Stylize"
+}

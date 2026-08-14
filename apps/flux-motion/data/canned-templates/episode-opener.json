@@ -1,0 +1,10 @@
+{
+  "id": 203,
+  "title": "Episode Opener",
+  "description": "Centered episode title card with show and episode information.",
+  "default_name": "EPISODE TITLE",
+  "category": "Podcast",
+  "subcategory": "Openers",
+  "collection": "Casual Podcast",
+  "file_name": "episode-opener.fxmt"
+}

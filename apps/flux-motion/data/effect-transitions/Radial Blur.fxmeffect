@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "radial-blur",
+  "name": "Radial Blur",
+  "type": "radial-blur",
+  "category": "Effects/Blur & Sharpen"
+}

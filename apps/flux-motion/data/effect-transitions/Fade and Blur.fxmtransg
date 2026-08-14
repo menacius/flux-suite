@@ -1,0 +1,11 @@
+{
+  "format": "flux-motion-general-transition",
+  "version": 1,
+  "id": "general.fade-blur",
+  "name": "Fade and Blur",
+  "type": "opacity-blur",
+  "easing": "ease-in-out",
+  "duration": 0.65,
+  "blur": 24,
+  "category": "Transitions/General/Blur"
+}

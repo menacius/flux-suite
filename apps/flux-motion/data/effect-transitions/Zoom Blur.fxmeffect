@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "zoom-blur",
+  "name": "Zoom Blur",
+  "type": "zoom-blur",
+  "category": "Effects/Blur & Sharpen"
+}

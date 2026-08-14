@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "glare",
+  "name": "Real Glare",
+  "type": "glare",
+  "category": "Effects/Light & Optical"
+}

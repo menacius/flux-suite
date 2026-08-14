@@ -1,0 +1,16 @@
+<RCC>
+  <qresource prefix="/branding">
+    <file>flux-encoder-icon.svg</file>
+    <file>flux-encoder-splash-about.svg</file>
+  </qresource>
+  <qresource prefix="/fonts">
+    <file alias="fonts/Satoshi-Regular.otf">../../../packages/flux-common/resources/fonts/Satoshi-Regular.otf</file>
+    <file alias="fonts/Satoshi-Italic.otf">../../../packages/flux-common/resources/fonts/Satoshi-Italic.otf</file>
+    <file alias="fonts/Satoshi-Medium.otf">../../../packages/flux-common/resources/fonts/Satoshi-Medium.otf</file>
+    <file alias="fonts/Satoshi-MediumItalic.otf">../../../packages/flux-common/resources/fonts/Satoshi-MediumItalic.otf</file>
+    <file alias="fonts/Satoshi-Bold.otf">../../../packages/flux-common/resources/fonts/Satoshi-Bold.otf</file>
+    <file alias="fonts/Satoshi-BoldItalic.otf">../../../packages/flux-common/resources/fonts/Satoshi-BoldItalic.otf</file>
+    <file alias="fonts/Satoshi-Black.otf">../../../packages/flux-common/resources/fonts/Satoshi-Black.otf</file>
+    <file alias="fonts/Satoshi-BlackItalic.otf">../../../packages/flux-common/resources/fonts/Satoshi-BlackItalic.otf</file>
+  </qresource>
+</RCC>

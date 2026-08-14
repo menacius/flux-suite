@@ -1,0 +1,147 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float4 effectColor;
+uniform float opacity;
+uniform float amount;
+uniform float softness;
+uniform float spread;
+uniform float falloff;
+uniform float radius;
+uniform int invert;
+uniform int monochrome;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+float4 key_sample(float2 uv) { return image.Sample(textureSampler, uv); }
+float3 key_straight(float4 color)
+{
+    return color.a > 0.00001 ? color.rgb / color.a : float3(0.0, 0.0, 0.0);
+}
+float key_luma(float3 color)
+{
+    return dot(color, float3(0.2126, 0.7152, 0.0722));
+}
+float2 key_chroma(float3 color)
+{
+    float y = key_luma(color);
+    return float2((color.b - y) * 0.5389, (color.r - y) * 0.6350);
+}
+float key_color_distance(float3 color, float3 key_color)
+{
+    float2 chroma_delta = key_chroma(color) - key_chroma(key_color);
+    float luma_delta = abs(key_luma(color) - key_luma(key_color));
+    return length(chroma_delta) + luma_delta * 0.18;
+}
+float key_keep_from_distance(float distance_value)
+{
+    float edge0 = max(amount, 0.0);
+    float edge1 = edge0 + max(softness, 0.0001);
+    float keep = smoothstep(edge0, edge1, distance_value);
+    return invert != 0 ? 1.0 - keep : keep;
+}
+float3 neutralize_key_spill(float3 color, float3 key_color,
+                            float mask, float strength)
+{
+    float source_luma = key_luma(color);
+    float key_luminance = max(key_luma(key_color), 0.0001);
+    float3 normalized_key = key_color / key_luminance;
+    float3 neutral = float3(source_luma, source_luma, source_luma);
+    float key_projection = max(dot(color - neutral,
+                                   normalized_key - float3(1.0, 1.0, 1.0)),
+                               0.0);
+    float spill_mask = saturate(mask * strength + key_projection * strength);
+    return lerp(color, neutral, spill_mask);
+}
+float4 PSChromaKey(VertDataOut v_in) : TARGET
+{
+    float4 base = key_sample(v_in.uv);
+    float3 straight = key_straight(base);
+    float keep = key_keep_from_distance(
+        key_color_distance(straight, effectColor.rgb));
+    keep = saturate(keep + saturate(falloff) * keep * (1.0 - keep));
+    float3 despilled = neutralize_key_spill(
+        straight, effectColor.rgb, 1.0 - keep, saturate(spread));
+    float output_alpha = base.a * lerp(1.0, keep, saturate(opacity));
+    return float4(despilled * output_alpha, output_alpha);
+}
+float4 PSLumaKey(VertDataOut v_in) : TARGET
+{
+    float4 base = key_sample(v_in.uv);
+    float3 straight = key_straight(base);
+    float luminance = key_luma(straight);
+    float half_feather = max(softness, 0.0001) * 0.5;
+    float keep = smoothstep(amount - half_feather,
+                            amount + half_feather, luminance);
+    if (invert != 0)
+        keep = 1.0 - keep;
+    float output_alpha = base.a * lerp(1.0, keep, saturate(opacity));
+    return float4(straight * output_alpha, output_alpha);
+}
+float4 PSColorRange(VertDataOut v_in) : TARGET
+{
+    float4 base = key_sample(v_in.uv);
+    float3 straight = key_straight(base);
+    float keep = key_keep_from_distance(
+        key_color_distance(straight, effectColor.rgb));
+    float output_alpha = base.a * lerp(1.0, keep, saturate(opacity));
+    return float4(straight * output_alpha, output_alpha);
+}
+float4 PSSpillSuppression(VertDataOut v_in) : TARGET
+{
+    float4 base = key_sample(v_in.uv);
+    float3 straight = key_straight(base);
+    float distance_value = key_color_distance(straight, effectColor.rgb);
+    float range_value = max(softness, 0.0001);
+    float mask = 1.0 - smoothstep(range_value * 0.35,
+                                  range_value, distance_value);
+    float3 suppressed = neutralize_key_spill(
+        straight, effectColor.rgb, mask, saturate(amount));
+    if (monochrome != 0) {
+        float source_luma = key_luma(straight);
+        float result_luma = max(key_luma(suppressed), 0.0001);
+        suppressed *= source_luma / result_luma;
+    }
+    return float4(lerp(base.rgb, suppressed * base.a, saturate(opacity)),
+                  base.a);
+}
+float4 PSMatteChoker(VertDataOut v_in) : TARGET
+{
+    float4 base = key_sample(v_in.uv);
+    float2 delta = texelSize * max(radius, 0.0);
+    float min_alpha = base.a;
+    float max_alpha = base.a;
+    float a1 = key_sample(v_in.uv + float2(delta.x, 0.0)).a;
+    float a2 = key_sample(v_in.uv - float2(delta.x, 0.0)).a;
+    float a3 = key_sample(v_in.uv + float2(0.0, delta.y)).a;
+    float a4 = key_sample(v_in.uv - float2(0.0, delta.y)).a;
+    float a5 = key_sample(v_in.uv + delta).a;
+    float a6 = key_sample(v_in.uv - delta).a;
+    float a7 = key_sample(v_in.uv + float2(delta.x, -delta.y)).a;
+    float a8 = key_sample(v_in.uv + float2(-delta.x, delta.y)).a;
+    min_alpha = min(min_alpha, min(min(a1, a2), min(a3, a4)));
+    min_alpha = min(min_alpha, min(min(a5, a6), min(a7, a8)));
+    max_alpha = max(max_alpha, max(max(a1, a2), max(a3, a4)));
+    max_alpha = max(max_alpha, max(max(a5, a6), max(a7, a8)));
+    float target_alpha = amount >= 0.0 ? min_alpha : max_alpha;
+    float adjusted = lerp(base.a, target_alpha, saturate(abs(amount)));
+    float feather_width = max(softness, 0.0001);
+    adjusted = smoothstep(feather_width * 0.25,
+                          1.0 - feather_width * 0.25, adjusted);
+    float output_alpha = lerp(base.a, adjusted, saturate(opacity));
+    return float4(key_straight(base) * output_alpha, output_alpha);
+}
+technique ChromaKey { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSChromaKey(v_in); } }
+technique LumaKey { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSLumaKey(v_in); } }
+technique ColorRange { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSColorRange(v_in); } }
+technique SpillSuppression { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSSpillSuppression(v_in); } }
+technique MatteChoker { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSMatteChoker(v_in); } }
+technique Draw { pass { vertex_shader=VSDefault(v_in); pixel_shader=PSChromaKey(v_in); } }

@@ -1,0 +1,13 @@
+[
+  {
+    "schema_version": 1,
+    "development_version": 415,
+    "id": "flux-encoder-ipc-smoke-title",
+    "name": "IPC Smoke Title",
+    "duration": 5.0,
+    "width": 1920,
+    "height": 1080,
+    "frame_rate": 25.0,
+    "layers": []
+  }
+]

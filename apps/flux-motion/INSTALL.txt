@@ -1,0 +1,81 @@
+FXM Incremental Update, Build, Install and Package Tools
+========================================================
+
+INSTALLATION
+------------
+Copy these five files into the project root, next to CMakeLists.txt:
+
+  build-windows.ps1
+  update-and-build.ps1
+  update-and-build.bat
+  update-and-build.config.json
+  INSTALL.txt (optional)
+
+The default update inbox is:
+  %USERPROFILE%\Desktop\FXM Updates
+
+Put the newest complete Flux_Motion_*.zip in that folder.
+
+NORMAL INCREMENTAL UPDATE + BUILD + OBS INSTALL + ZIP
+-----------------------------------------------------
+  update-and-build.bat
+
+The updater compares file contents by SHA-256, changes only files whose content
+is different, preserves the existing build folder, and lets CMake/MSBuild compile
+only affected translation units and dependencies.
+
+CLEAN UPDATE + FULL REBUILD + OBS INSTALL + ZIP
+------------------------------------------------
+  update-and-build.bat clean
+
+Also accepted:
+  update-and-build.bat /clean
+  update-and-build.bat -clean
+
+OTHER MODES
+-----------
+  update-and-build.bat buildonly
+  update-and-build.bat updateonly
+
+OUTPUTS AFTER A SUCCESSFUL BUILD
+--------------------------------
+1. The final staged OBS package is installed under the configured OBS plugins
+   root. The default is:
+     %ProgramData%\obs-studio\plugins\flux-motion
+
+2. A redistributable ZIP is created in the active build folder using:
+     <name>_<version>_<dev-version>_<platform>.zip
+
+   Current example:
+     Flux_Motion_v0.8.19-alpha_development-version-419_windows-x64.zip
+
+   The ZIP contains the same plugin folder, data files and runtime DLLs that are
+   copied into OBS.
+
+3. After the complete build/install/package operation succeeds, the consumed
+   source ZIP is moved to:
+     %USERPROFILE%\Desktop\FXM Updates\Processed
+
+CONFIGURATION
+-------------
+Edit update-and-build.config.json to change the inbox, build directory,
+configuration, OBS SDK, OBS install root, package name, platform tag or package
+output folder.
+
+Relevant defaults:
+  "SkipInstall": false
+  "CreatePackage": true
+  "PackageName": "Flux_Motion"
+  "PackagePlatform": ""             (auto: windows-x64 for x64)
+  "PackageOutputDirectory": ""      (auto: active build folder)
+
+Set "SkipInstall" to true to build/package without copying into OBS.
+Set "CreatePackage" to false to build/install without creating the ZIP.
+
+Close OBS before running the build so the existing plugin DLL is not locked.
+
+POWERSHELL ERROR DIAGNOSTICS
+----------------------------
+The updater ignores empty ValueFromRemainingArguments entries produced by some
+Windows PowerShell 5.1 invocations. Any future terminating error now prints its
+exact script line and command instead of only "null-valued expression".

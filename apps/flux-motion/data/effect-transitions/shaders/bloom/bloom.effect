@@ -1,0 +1,23 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d blurredImage;
+uniform float4 effectColor;
+uniform float intensity;
+uniform float opacity;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v) { VertDataOut o; o.pos = mul(float4(v.pos.xyz, 1.0), ViewProj); o.uv = v.uv; return o; }
+
+float4 PSBloom(VertDataOut v) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v.uv);
+    float4 bloom = blurredImage.Sample(textureSampler, v.uv);
+    float gain = max(intensity, 0.0) * clamp(opacity, 0.0, 1.0) * effectColor.a;
+    float3 added = bloom.rgb * effectColor.rgb * gain;
+    float addedAlpha = bloom.a * gain;
+    return float4(min(base.rgb + added, float3(1.0, 1.0, 1.0)), max(base.a, addedAlpha));
+}
+
+technique Draw { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSBloom(v_in); } }

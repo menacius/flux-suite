@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible Flux problem
+title: "[Bug]: "
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Flux Motion
+        - Flux Encoder
+        - Flux Suite Installer
+        - Flux Motion Plugin for OBS
+        - Flux Common
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Copy the value shown by the affected component.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true

@@ -1,0 +1,90 @@
+{
+  "schema": 2,
+  "suiteVersion": "2026 - v0.8.19-alpha",
+  "channel": "Alpha",
+  "products": [
+    {
+      "id": "encoder",
+      "name": "Flux Encoder",
+      "tagline": "Professional media encoding",
+      "description": "Queue, inspect and encode media with hardware-aware FFmpeg profiles.",
+      "version": "2026 - v0.8.18-alpha",
+      "accent": "#7457ff",
+      "glyph": "FE",
+      "icon": ":/flux/icons/flux-encoder.svg",
+      "package": "../Flux Encoder/Flux_Encoder_2026_-_v0.8.18-alpha_windows-x64.zip",
+      "url": "",
+      "sha256": "ee4cd4cae074e5fc59048cf8f575c90c339034d100b582906b4fe07ee68bd3c2",
+      "size": 161930391,
+      "installFolder": "Flux Encoder",
+      "executable": "Flux Encoder.exe",
+      "packageRoot": "",
+      "kind": "application",
+      "archiveLimit": 3,
+      "changelog": {
+        "fromVersion": "2026 - v0.8.17-alpha",
+        "version": "2026 - v0.8.18-alpha",
+        "entries": [
+          "Synchronized package and suite metadata for the v0.8.18 alpha development release.",
+          "Uses the suite-owned rendering interfaces when receiving Flux Motion export jobs."
+        ]
+      }
+    },
+    {
+      "id": "motion-editor",
+      "name": "Flux Motion",
+      "tagline": "Real-time graphics authoring",
+      "description": "Design broadcast graphics, titles and motion scenes in one focused workspace.",
+      "version": "2026 - v0.8.19-alpha",
+      "accent": "#ff416c",
+      "glyph": "FM",
+      "icon": ":/flux/icons/flux-motion.svg",
+      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.19-alpha_windows-x64.zip",
+      "url": "",
+      "sha256": "84af1a7b3d04f21f64af53180c44b4fc5d95976dc9c6c3b6cc60ab821c7df1cc",
+      "size": 57973132,
+      "installFolder": "Flux Motion",
+      "executable": "Flux Motion.exe",
+      "packageRoot": "",
+      "kind": "application",
+      "archiveLimit": 3,
+      "changelog": {
+        "fromVersion": "2026 - v0.8.18-alpha",
+        "version": "2026 - v0.8.19-alpha",
+        "entries": [
+          "Added native Chart layers with seven chart types, Static or external data, per-value colors, shared gradients and optional OBS-dock exposure.",
+          "Improved playback and adaptive-resolution performance while keeping OBS, final output and cache rendering at full quality.",
+          "Added the in-window Welcome popup with Flux Motion branding and application logo, plus the standalone New Title format dialog; enabled first-install precaching and fixed initial text, canvas layout and strict Play after rendering behavior."
+        ]
+      }
+    },
+    {
+      "id": "motion-obs",
+      "name": "Flux Motion Plugin for OBS",
+      "tagline": "Native OBS graphics integration",
+      "description": "Cue and render Flux Motion projects directly inside OBS Studio.",
+      "version": "2026 - v0.8.19-alpha",
+      "accent": "#14c9b3",
+      "glyph": "FX",
+      "icon": ":/flux/icons/flux-motion-obs.svg",
+      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.19-alpha_windows-x64.zip",
+      "url": "",
+      "sha256": "9dfc486ca39e2a9d8d14cbb0d0dd0712b3ea6a2ad6a2d6ec5282d9cf15dd6456",
+      "size": 20712381,
+      "installFolder": "flux-motion",
+      "executable": "bin/64bit/flux-motion.dll",
+      "packageRoot": "flux-motion",
+      "kind": "obs-plugin",
+      "archiveLimit": 3,
+      "changelog": {
+        "fromVersion": "2026 - v0.8.18-alpha",
+        "version": "2026 - v0.8.19-alpha",
+        "entries": [
+          "Added shared native Chart rendering with consistent external-source settings, field mappings, colors, gradients and selected Static Data values exposed in the OBS dock.",
+          "Kept OBS-created titles on the active OBS resolution and frame rate, and made cached chart animation deterministic.",
+          "Fixed first-frame Text rendering with caching and simplified Playback and Cache controls to Clear All Cache and Cache Entire Timeline."
+        ]
+      }
+    }
+  ]
+}

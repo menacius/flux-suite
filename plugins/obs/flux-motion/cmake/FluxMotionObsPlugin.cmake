@@ -1,0 +1,55 @@
+# OBS host-adapter inventory. The compositor is owned by the suite common tree.
+set(OBS_FXM_OBS_PLUGIN_RENDERING_SOURCES
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-render-backend.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-title-preview-renderer.cpp")
+set(OBS_FXM_OBS_PLUGIN_RENDERING_HEADERS
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-render-backend.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-title-preview-renderer.h")
+set(OBS_FXM_OBS_PLUGIN_SOURCE_HEADERS
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source.h")
+set(OBS_FXM_OBS_PLUGIN_SOURCE_SOURCES
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source.cpp")
+set(OBS_FXM_OBS_PLUGIN_AUDIO_SOURCES
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-audio-backend.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/title-audio-runtime.cpp")
+set(OBS_FXM_OBS_PLUGIN_AUDIO_HEADERS
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-audio-backend.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/title-audio-runtime.h")
+set(OBS_FXM_OBS_PLUGIN_HOST_SOURCES
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-editor-host.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-frame-rate-provider.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-host-context-provider.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-logger.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-plugin-preferences.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-translation-provider.cpp")
+set(OBS_FXM_OBS_PLUGIN_HOST_HEADERS
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-asset-path-provider.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-editor-host.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-frame-rate-provider.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-host-context-provider.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-logger.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-plugin-preferences.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/obs-translation-provider.h")
+set(OBS_FXM_OBS_PLUGIN_INTEGRATION_SOURCES
+    "${OBS_FXM_OBS_PLUGIN_DIR}/plugin-main.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/stinger-transition.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/title-hotkeys.cpp")
+set(OBS_FXM_OBS_PLUGIN_INTEGRATION_HEADERS
+    "${OBS_FXM_OBS_PLUGIN_DIR}/plugin-main.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/stinger-transition.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/title-hotkeys.h")
+set(OBS_FXM_OBS_PLUGIN_SOURCE_MODULES
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/compatibility-effects-compositor.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/compatibility-layer-raster.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/compatibility-text-rendering.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/gpu-effects-transitions.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/gpu-masks-groups-cache.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/gpu-presentation-readback.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/gpu-resources-primitives.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/gpu-session-lifecycle.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/gpu-frame-cache-alias.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/layer-evaluation-layout.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/scene-masks-properties.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/source-lifecycle-playback.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/source-registration.inc"
+    "${FLUX_SUITE_COMMON_DIR}/Shared/rendering-engine/title-source/source-runtime.inc")

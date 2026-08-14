@@ -1,0 +1,10 @@
+{
+  "id": 101,
+  "title": "Breaking News Lower Third",
+  "description": "Bold breaking-news identification with headline and supporting line.",
+  "default_name": "BREAKING NEWS",
+  "category": "News",
+  "subcategory": "Lower Thirds",
+  "collection": "Big News Studio",
+  "file_name": "breaking-news-lower-third.fxmt"
+}

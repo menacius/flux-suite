@@ -1,0 +1,19 @@
+name: Build Flux Encoder
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/flux-encoder/**"
+      - "packages/flux-common/**"
+      - "cmake/**"
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y qt6-base-dev libqt6svg6-dev
+      - run: cmake -S . -B out/build/encoder -DFLUX_BUILD_ENCODER=ON -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build out/build/encoder --parallel
+      - run: ctest --test-dir out/build/encoder --output-on-failure

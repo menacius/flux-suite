@@ -1,0 +1,182 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float2 texelSize;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float4 effectColor;
+uniform float4 secondaryColor;
+uniform float opacity;
+uniform float amount;
+uniform float scale;
+uniform float radius;
+uniform float spread;
+uniform float falloff;
+uniform float2 center;
+uniform float angle;
+uniform float ghostCount;
+uniform float profile;
+
+sampler_state textureSampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float2 layer_space_uv(float2 surface_uv)
+{
+    float2 delta = surface_uv - layerUvOrigin;
+    float determinant = layerUvAxisX.x * layerUvAxisY.y -
+                        layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(determinant) <= 0.0000001) {
+        float2 extent = max(abs(layerUvRect.zw), float2(0.000001, 0.000001));
+        return (surface_uv - layerUvRect.xy) / extent;
+    }
+    return float2(
+        (delta.x * layerUvAxisY.y - delta.y * layerUvAxisY.x) / determinant,
+        (layerUvAxisX.x * delta.y - layerUvAxisX.y * delta.x) / determinant);
+}
+
+float flare_disc(float2 flare_pos, float discRadius, float feather)
+{
+    float safe_radius = max(discRadius, 0.0001);
+    float safe_feather = max(feather, 0.0001);
+    return 1.0 - smoothstep(safe_radius - safe_feather,
+                            safe_radius + safe_feather,
+                            length(flare_pos));
+}
+
+float flare_halo(float distance_value, float halo_radius, float decay)
+{
+    float normalized = distance_value / max(halo_radius, 0.0001);
+    return 1.0 / (1.0 + normalized * normalized * max(decay, 0.05));
+}
+
+float4 PSLensFlare(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float2 effect_uv = layer_space_uv(v_in.uv);
+
+    /* Keep the procedural geometry in square pixel space.  This avoids the
+     * DX11/OpenGL divergence caused by deriving the flare shape directly from
+     * non-square UV coordinates. */
+    float aspect = max(layerPixelSize.x / max(layerPixelSize.y, 1.0), 0.0001);
+    float2 flare_pos = effect_uv - center;
+    flare_pos.x *= aspect;
+
+    float safe_scale = max(scale, 0.001);
+    float safe_radius = max(radius * safe_scale, 0.001);
+    float distance_value = length(flare_pos);
+    float safe_falloff = max(falloff, 0.05);
+
+    float core = flare_disc(flare_pos, safe_radius * 0.38,
+                            safe_radius * 0.16);
+    float glow = flare_halo(distance_value, safe_radius * 1.55,
+                            safe_falloff * 2.0);
+    float outer_halo = flare_disc(flare_pos, safe_radius * 2.35,
+                                  safe_radius * 0.28) * 0.22;
+
+    float radians = angle * 0.01745329252;
+    float2 axis = float2(cos(radians), sin(radians));
+    float2 perpendicular = float2(-axis.y, axis.x);
+    float along_axis = abs(dot(flare_pos, axis));
+    float across_axis = abs(dot(flare_pos, perpendicular));
+    float ray_width = safe_radius * 0.055;
+    float ray_length = safe_radius * 8.0;
+    float primary_ray = (1.0 - smoothstep(0.0, ray_width, across_axis)) *
+                        (1.0 - smoothstep(safe_radius * 0.25,
+                                          ray_length, along_axis));
+    float secondary_ray = (1.0 - smoothstep(0.0, ray_width * 0.65,
+                                             along_axis)) *
+                          (1.0 - smoothstep(safe_radius * 0.25,
+                                            ray_length * 0.72,
+                                            across_axis));
+
+    /* Ghosts lie on the optical axis between the flare and the frame centre.
+     * They are written explicitly rather than through a dynamic loop because
+     * OBS must compile the same effect for D3D11 and OpenGL. */
+    float2 optical_axis = float2(0.5, 0.5) - center;
+    optical_axis.x *= aspect;
+    float safe_spread = max(spread, 0.0);
+    float ghost1 = flare_disc(flare_pos - optical_axis * (0.55 + safe_spread * 0.30),
+                              safe_radius * 0.42, safe_radius * 0.16);
+    float ghost2 = flare_disc(flare_pos - optical_axis * (1.15 + safe_spread * 0.60),
+                              safe_radius * 0.28, safe_radius * 0.12) *
+                   step(2.5, ghostCount);
+    float ghost3 = flare_disc(flare_pos - optical_axis * (1.85 + safe_spread * 0.95),
+                              safe_radius * 0.36, safe_radius * 0.14) *
+                   step(4.5, ghostCount);
+    float ghost4 = flare_disc(flare_pos + optical_axis * (0.42 + safe_spread * 0.20),
+                              safe_radius * 0.20, safe_radius * 0.10) *
+                   step(6.5, ghostCount);
+
+    float anamorphic = (1.0 - smoothstep(0.0, safe_radius * 0.045,
+                                         abs(flare_pos.y))) *
+                        (1.0 - smoothstep(safe_radius * 0.35,
+                                          safe_radius * 11.0,
+                                          abs(flare_pos.x)));
+
+    float profile_value = profile;
+    float anamorphic_profile = 1.0 - step(0.5, abs(profile_value - 1.0));
+    float warm_profile = 1.0 - step(0.5, abs(profile_value - 2.0));
+    float scifi_profile = 1.0 - step(0.5, abs(profile_value - 3.0));
+    float subtle_profile = 1.0 - step(0.5, abs(profile_value - 4.0));
+
+    float flare_shape = core * 1.35 + glow * 0.58 + outer_halo +
+                        primary_ray * (0.34 + scifi_profile * 0.30) +
+                        secondary_ray * 0.18 +
+                        ghost1 * 0.42 + ghost2 * 0.30 +
+                        ghost3 * 0.24 + ghost4 * 0.18 +
+                        anamorphic * (anamorphic_profile * 0.85 +
+                                      scifi_profile * 0.55);
+    flare_shape *= lerp(1.0, 0.48, subtle_profile);
+
+    float color_mix = saturate(distance_value /
+                               max(safe_radius * 4.0, 0.001));
+    float3 flare_color = lerp(effectColor.rgb,
+                              secondaryColor.rgb,
+                              color_mix);
+    flare_color = lerp(flare_color,
+                       float3(1.0, 0.48, 0.16),
+                       warm_profile * 0.38);
+
+    float alpha_scale = max(effectColor.a, secondaryColor.a);
+    float flare_alpha = saturate(flare_shape * max(amount, 0.0) *
+                                 clamp(opacity, 0.0, 1.0) * alpha_scale);
+
+    /* OBS textures use premultiplied alpha.  The flare is generative, so it
+     * must be able to create visible pixels even when the input is transparent
+     * while still preserving the source alpha everywhere else. */
+    float output_alpha = saturate(base.a + flare_alpha * (1.0 - base.a));
+    float3 output_rgb = saturate(base.rgb + flare_color * flare_alpha);
+    return float4(output_rgb, output_alpha);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSLensFlare(v_in);
+    }
+}

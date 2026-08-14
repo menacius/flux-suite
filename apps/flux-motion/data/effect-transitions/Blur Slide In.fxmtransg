@@ -1,0 +1,13 @@
+{
+  "format": "flux-motion-general-transition",
+  "version": 1,
+  "id": "general.blur-slide-in",
+  "name": "Blur Slide In/Out",
+  "type": "blur-slide",
+  "easing": "ease-in-out",
+  "duration": 0.65,
+  "direction": "left",
+  "offset": 140,
+  "blur": 26,
+  "category": "Transitions/General/Slide"
+}

@@ -1,0 +1,18 @@
+<RCC>
+  <qresource prefix="/flux">
+    <file alias="manifest.json">manifest.json</file>
+    <file alias="update-public-key.json">update-public-key.json</file>
+    <file alias="icons/flux-encoder.svg">icons/flux-encoder.svg</file>
+    <file alias="icons/flux-motion.svg">icons/flux-motion.svg</file>
+    <file alias="icons/flux-motion-obs.svg">icons/flux-motion-obs.svg</file>
+    <file alias="icons/flux-suite.svg">icons/flux-suite.svg</file>
+    <file alias="icons/mime-flux-motion-title-graphics.svg">icons/mime-flux-motion-title-graphics.svg</file>
+    <file alias="icons/mime-flux-motion-project.svg">icons/mime-flux-motion-project.svg</file>
+    <file alias="icons/mime-flux-encoder-queue.svg">icons/mime-flux-encoder-queue.svg</file>
+    <file alias="fonts/Satoshi-Regular.otf">../../../packages/flux-common/resources/fonts/Satoshi-Regular.otf</file>
+    <file alias="fonts/Satoshi-Medium.otf">../../../packages/flux-common/resources/fonts/Satoshi-Medium.otf</file>
+    <file alias="fonts/Satoshi-Bold.otf">../../../packages/flux-common/resources/fonts/Satoshi-Bold.otf</file>
+    <file alias="fonts/Satoshi-Black.otf">../../../packages/flux-common/resources/fonts/Satoshi-Black.otf</file>
+    <file alias="fonts/Satoshi-LICENSE.txt">../../../packages/flux-common/resources/fonts/Satoshi-LICENSE.txt</file>
+  </qresource>
+</RCC>

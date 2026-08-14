@@ -1,0 +1,13 @@
+{
+  "id": "org.fluxmotion.renderer",
+  "name": "Flux Motion Headless Renderer",
+  "version": "2026 - v0.8.18-alpha",
+  "vendor": "Flux",
+  "fluxEncoderProviderAbi": 1,
+  "protocolVersion": 1,
+  "executionMode": "out-of-process",
+  "executable": "renderer/flux-motion-renderer.exe",
+  "projectExtensions": ["*.fxmt", "*.fxmp", "*.json"],
+  "capabilities": ["project-probe", "direct-project-files", "video-frames", "audio-mix", "alpha", "frame-ranges", "external-data-snapshot"],
+  "headless": true
+}

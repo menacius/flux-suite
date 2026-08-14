@@ -1,0 +1,24 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "grain",
+  "name": "Grain",
+  "category": ["Effects", "Noise and Grain"],
+  "type": "grain",
+  "parameters": {
+    "profile": 1,
+    "amount": 0.22,
+    "scale": 2.0,
+    "softness": 0.08,
+    "complexity": 5.0,
+    "spread": 2.0,
+    "falloff": 0.52,
+    "speed": 1.0,
+    "evolution": 0.0,
+    "seed": 1,
+    "animated": false,
+    "monochrome": true,
+    "temporalStability": true
+  }
+}

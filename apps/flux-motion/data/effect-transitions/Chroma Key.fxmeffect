@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "chroma-key",
+  "name": "Chroma Key",
+  "type": "chroma-key",
+  "category": "Effects/Keying & Matte"
+}

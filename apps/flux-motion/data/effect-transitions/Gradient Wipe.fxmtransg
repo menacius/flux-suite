@@ -1,0 +1,1 @@
+{"format":"flux-motion-general-transition","version":1,"id":"gradient-wipe","name":"Gradient Wipe","category":["Transitions","General","Gradient Wipe"],"type":"gradient-wipe","duration":0.75,"profile":0,"rotation":0.0,"centerX":0.5,"centerY":0.5,"aspect":1.0,"invert":false,"softness":0.18,"easing":"linear"}

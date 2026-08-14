@@ -1,0 +1,1 @@
+{"format":"flux-motion-general-transition","version":1,"id":"clock","name":"Clock","category":["Transitions","General","Clock"],"type":"clock","duration":0.7,"clockwise":true,"centerX":0.5,"centerY":0.5,"rotation":-90.0,"softness":0.02,"easing":"ease-in-out"}

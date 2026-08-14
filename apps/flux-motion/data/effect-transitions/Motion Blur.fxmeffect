@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "motion-blur",
+  "name": "Motion Blur",
+  "type": "motion-blur",
+  "category": "Effects/Time"
+}

@@ -1,0 +1,10 @@
+{
+  "id": 105,
+  "title": "News Quote Card",
+  "description": "Editorial quote card for statements and key excerpts.",
+  "default_name": "A key statement from the story goes here.",
+  "category": "News",
+  "subcategory": "Quote Cards",
+  "collection": "Big News Studio",
+  "file_name": "news-quote-card.fxmt"
+}

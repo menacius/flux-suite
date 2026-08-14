@@ -1,0 +1,9 @@
+#include "core/job-builder.h"
+#include "core/profile-catalog.h"
+#include <QCoreApplication>
+#include <QDebug>
+
+int main(int argc,char **argv)
+{
+    QCoreApplication app(argc,argv);flux::FfmpegCapabilities caps;caps.encoders={QStringLiteral("libx264"),QStringLiteral("h264_nvenc")};flux::EncoderProbe nv;nv.compiled=true;nv.runtimeAvailable=true;caps.encoderProbes.insert(QStringLiteral("h264_nvenc"),nv);const auto profiles=flux::ProfileCatalog::builtInProfiles(caps);bool hasSoftware=false,hasNvenc=false,hasQsv=false;for(const auto &p:profiles){hasSoftware|=p.videoEncoder==QStringLiteral("libx264");hasNvenc|=p.videoEncoder==QStringLiteral("h264_nvenc")&&p.enabled;hasQsv|=p.videoEncoder==QStringLiteral("h264_qsv")&&!p.enabled;}if(!hasSoftware||!hasNvenc||!hasQsv){qCritical()<<"Profile catalog contract failed";return 1;}flux::QueueJob job;job.sourcePath=QStringLiteral("input.mov");job.outputPath=QStringLiteral("output.mp4");job.profileSnapshot=profiles.first();job.profileSnapshot.burnTimecode=true;job.profileSnapshot.timecodeStart=QStringLiteral("01:00:00:00");const auto args=flux::JobBuilder::ffmpegArguments(job,QStringLiteral("output.part.mp4"));if(!args.contains(QStringLiteral("-progress"))||!args.contains(QStringLiteral("-c:v"))){qCritical()<<"Job arguments contract failed";return 2;}const int filterIndex=args.indexOf(QStringLiteral("-vf"));if(filterIndex<0||filterIndex+1>=args.size()||!args.at(filterIndex+1).contains(QStringLiteral("drawtext="))){qCritical()<<"Timecode overlay contract failed";return 3;}job.profileSnapshot.audioEncoder=QStringLiteral("aac");const auto providerArgs=flux::JobBuilder::ffmpegArguments(job,QStringLiteral("provider.part.mp4"),nullptr,{QStringLiteral("-f"),QStringLiteral("rawvideo"),QStringLiteral("-i"),QStringLiteral("pipe:0"),QStringLiteral("-i"),QStringLiteral("audio.wav")},1);if(!providerArgs.contains(QStringLiteral("1:a:0?"))){qCritical()<<"Provider audio mapping contract failed";return 4;}return 0;
+}

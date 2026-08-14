@@ -1,0 +1,13 @@
+{
+  "format": "flux-motion-text-transition",
+  "version": 1,
+  "id": "text.scale",
+  "name": "Scale Text",
+  "type": "text-scale",
+  "easing": "ease-in-out",
+  "duration": 0.85,
+  "unit": "character",
+  "scaleFrom": 0.35,
+  "stagger": 0.5,
+  "category": "Transitions/Text/Scale"
+}

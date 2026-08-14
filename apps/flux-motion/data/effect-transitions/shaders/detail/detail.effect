@@ -1,0 +1,140 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d blurredImage;
+uniform float2 texelSize;
+uniform float opacity;
+uniform float amount;
+uniform float threshold;
+uniform float highlightProtection;
+uniform float shadowProtection;
+uniform float midtoneBias;
+uniform float rangeThreshold;
+uniform float edgeProtection;
+uniform int luminanceOnly;
+uniform int overlayPreview;
+uniform int protectAlpha;
+
+sampler_state textureSampler {
+    Filter = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut o;
+    o.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    o.uv = v_in.uv;
+    return o;
+}
+float detail_luma(float3 c)
+{
+    return dot(c, float3(0.2126, 0.7152, 0.0722));
+}
+float3 detail_straight(float4 c)
+{
+    return c.a > 0.00001 ? c.rgb / c.a : float3(0.0, 0.0, 0.0);
+}
+float detail_gate(float3 detail)
+{
+    float magnitude = abs(detail_luma(detail));
+    return smoothstep(max(threshold, 0.0), max(threshold, 0.0) + 0.02, magnitude);
+}
+float detail_tone_weight(float luminance)
+{
+    float shadow = lerp(1.0, smoothstep(0.0, 0.35, luminance), saturate(shadowProtection));
+    float highlight = lerp(1.0, 1.0 - smoothstep(0.65, 1.0, luminance), saturate(highlightProtection));
+    return shadow * highlight;
+}
+float3 detail_vector(float3 source, float3 lowpass)
+{
+    float3 d = source - lowpass;
+    if (luminanceOnly != 0) {
+        float y = detail_luma(d);
+        d = float3(y, y, y);
+    }
+    return d;
+}
+float4 detail_output(float4 base, float3 result, float alpha_delta)
+{
+    float out_alpha = base.a;
+    if (protectAlpha == 0)
+        out_alpha = saturate(base.a + alpha_delta);
+    return float4(saturate(result) * out_alpha, out_alpha);
+}
+float3 overlay_blend(float3 a, float3 b)
+{
+    float3 low = 2.0 * a * b;
+    float3 high = 1.0 - 2.0 * (1.0 - a) * (1.0 - b);
+    return lerp(low, high, step(float3(0.5, 0.5, 0.5), a));
+}
+float4 PSSharpen(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float3 source = detail_straight(base);
+    float3 lowpass = detail_straight(blurredImage.Sample(textureSampler, v_in.uv));
+    float3 d = detail_vector(source, lowpass);
+    float gate = detail_gate(d) * detail_tone_weight(detail_luma(source));
+    float3 result = source + d * amount * gate;
+    result = lerp(source, result, saturate(opacity));
+    return detail_output(base, result, detail_luma(d) * amount * 0.04);
+}
+float4 PSUnsharpMask(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float3 source = detail_straight(base);
+    float3 lowpass = detail_straight(blurredImage.Sample(textureSampler, v_in.uv));
+    float3 d = detail_vector(source, lowpass);
+    float gate = detail_gate(d) * detail_tone_weight(detail_luma(source));
+    float3 result = source + d * amount * gate;
+    result = lerp(source, result, saturate(opacity));
+    return detail_output(base, result, detail_luma(d) * amount * 0.04);
+}
+float4 PSHighPass(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float3 source = detail_straight(base);
+    float3 lowpass = detail_straight(blurredImage.Sample(textureSampler, v_in.uv));
+    float3 d = detail_vector(source, lowpass);
+    float3 highpass = saturate(float3(0.5, 0.5, 0.5) + d * amount);
+    float3 result = overlayPreview != 0 ? overlay_blend(source, highpass) : highpass;
+    result = lerp(source, result, saturate(opacity));
+    return detail_output(base, result, 0.0);
+}
+float4 PSClarity(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float3 source = detail_straight(base);
+    float3 lowpass = detail_straight(blurredImage.Sample(textureSampler, v_in.uv));
+    float3 d = detail_vector(source, lowpass);
+    float luminance = detail_luma(source);
+    float center = 0.5 + clamp(midtoneBias, -1.0, 1.0) * 0.25;
+    float midtone = 1.0 - saturate(abs(luminance - center) / 0.5);
+    float gate = detail_gate(d) * detail_tone_weight(luminance);
+    float3 result = source + d * amount * midtone * gate;
+    result = lerp(source, result, saturate(opacity));
+    return detail_output(base, result, detail_luma(d) * amount * 0.03);
+}
+float4 PSBilateralSharpen(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float3 source = detail_straight(base);
+    float3 lowpass = detail_straight(blurredImage.Sample(textureSampler, v_in.uv));
+    float difference = abs(detail_luma(source) - detail_luma(lowpass));
+    float edge_gate = 1.0 - smoothstep(max(rangeThreshold, 0.001),
+                                       max(rangeThreshold, 0.001) * 2.0,
+                                       difference);
+    edge_gate = lerp(1.0, edge_gate, saturate(edgeProtection));
+    float3 d = detail_vector(source, lowpass);
+    float gate = detail_gate(d) * edge_gate;
+    float3 result = source + d * amount * gate;
+    result = lerp(source, result, saturate(opacity));
+    return detail_output(base, result, detail_luma(d) * amount * 0.025);
+}
+technique Sharpen { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSSharpen(v_in); } }
+technique UnsharpMask { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSUnsharpMask(v_in); } }
+technique HighPass { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSHighPass(v_in); } }
+technique Clarity { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSClarity(v_in); } }
+technique BilateralSharpen { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSBilateralSharpen(v_in); } }
+technique Draw { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSSharpen(v_in); } }

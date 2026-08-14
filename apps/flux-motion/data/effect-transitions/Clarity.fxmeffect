@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "clarity",
+  "name": "Clarity / Local Contrast",
+  "type": "clarity",
+  "category": "Effects/Blur & Sharpen"
+}

@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "displacement-map",
+  "name": "Displacement Map",
+  "type": "displacement-map",
+  "category": "Effects/Distortion"
+}

@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "color-range",
+  "name": "Color Range",
+  "type": "color-range",
+  "category": "Effects/Keying & Matte"
+}

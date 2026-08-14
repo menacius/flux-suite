@@ -1,0 +1,18 @@
+{
+  "folders": [
+    { "name": "Flux Suite", "path": "." },
+    { "name": "App: Flux Motion", "path": "apps/flux-motion" },
+    { "name": "App: Flux Encoder", "path": "apps/flux-encoder" },
+    { "name": "App: Flux Suite Installer", "path": "apps/flux-suite-installer" },
+    { "name": "Plugin: Flux Motion for OBS", "path": "plugins/obs/flux-motion" },
+    { "name": "Package: Flux Common", "path": "packages/flux-common" }
+  ],
+  "settings": {
+    "cmake.sourceDirectory": "${workspaceFolder:Flux Suite}",
+    "files.exclude": {
+      "**/out": true,
+      "**/build": true,
+      "**/build-*": true
+    }
+  }
+}

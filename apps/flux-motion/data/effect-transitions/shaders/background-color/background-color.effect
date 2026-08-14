@@ -1,0 +1,178 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform float4 layerUvRect;
+uniform float2 layerUvOrigin;
+uniform float2 layerUvAxisX;
+uniform float2 layerUvAxisY;
+uniform float2 layerPixelSize;
+uniform float4 effectColor;
+uniform float opacity;
+uniform float2 textureSize;
+uniform float4 backgroundRect;
+uniform float4 cornerRadii;
+uniform int fillType;
+uniform int gradientType;
+uniform int gradientSpread;
+uniform float4 gradientStartColor;
+uniform float4 gradientEndColor;
+uniform float gradientStartPos;
+uniform float gradientEndPos;
+uniform float gradientStartOpacity;
+uniform float gradientEndOpacity;
+uniform float gradientOpacity;
+uniform float gradientAngle;
+uniform float2 gradientCenter;
+uniform float2 gradientFocal;
+uniform float gradientScale;
+uniform float4 strokeColor;
+uniform float strokeWidth;
+uniform float strokeOpacity;
+
+sampler_state textureSampler {
+    Filter   = Linear;
+    AddressU = Clamp;
+    AddressV = Clamp;
+};
+
+struct VertDataIn {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+struct VertDataOut {
+    float4 pos : POSITION;
+    float2 uv  : TEXCOORD0;
+};
+
+VertDataOut VSDefault(VertDataIn v_in)
+{
+    VertDataOut vert_out;
+    vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+    vert_out.uv = v_in.uv;
+    return vert_out;
+}
+
+float2 layer_space_uv(float2 surface_uv)
+{
+    float2 delta = surface_uv - layerUvOrigin;
+    float determinant = layerUvAxisX.x * layerUvAxisY.y -
+                        layerUvAxisX.y * layerUvAxisY.x;
+    if (abs(determinant) <= 0.0000001) {
+        float2 extent = max(abs(layerUvRect.zw), float2(0.000001, 0.000001));
+        return (surface_uv - layerUvRect.xy) / extent;
+    }
+    return float2(
+        (delta.x * layerUvAxisY.y - delta.y * layerUvAxisY.x) / determinant,
+        (layerUvAxisX.x * delta.y - layerUvAxisX.y * delta.x) / determinant);
+}
+
+float rounded_rect_distance(float2 p, float2 rect_min, float2 rect_size, float4 radii)
+{
+    float2 local = p - rect_min;
+    float2 center = rect_size * 0.5;
+    float2 q = local - center;
+    bool right = q.x >= 0.0;
+    bool bottom = q.y >= 0.0;
+    float radius = bottom ? (right ? radii.z : radii.w)
+                          : (right ? radii.y : radii.x);
+    radius = clamp(radius, 0.0, 0.5 * min(rect_size.x, rect_size.y));
+    float2 d = abs(q) - (center - radius);
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0)) - radius;
+}
+
+float4 premultiply(float4 c, float opacity_scale)
+{
+    float a = clamp(c.a * opacity_scale, 0.0, 1.0);
+    return float4(c.rgb * a, a);
+}
+
+float4 over(float4 front, float4 back)
+{
+    return float4(front.rgb + back.rgb * (1.0 - front.a),
+                  front.a + back.a * (1.0 - front.a));
+}
+
+float spread_gradient(float value)
+{
+    if (gradientSpread == 2)
+        return frac(value);
+    if (gradientSpread == 1) {
+        float cycle = frac(value * 0.5) * 2.0;
+        return 1.0 - abs(cycle - 1.0);
+    }
+    return clamp(value, 0.0, 1.0);
+}
+
+float gradient_coordinate(float2 local)
+{
+    const float pi = 3.14159265358979323846;
+    float scale = max(abs(gradientScale), 0.001);
+    if (gradientType == 1) {
+        float2 delta = local - gradientFocal;
+        return length(delta) / scale;
+    }
+    if (gradientType == 2) {
+        float2 delta = local - gradientCenter;
+        float angle = atan2(delta.y, delta.x) / (2.0 * pi) + 0.5;
+        return angle + gradientAngle / 360.0;
+    }
+    float radians = gradientAngle * pi / 180.0;
+    float2 direction = float2(cos(radians), sin(radians));
+    return dot(local - gradientCenter, direction) / scale + 0.5;
+}
+
+float4 background_fill(float2 p, float2 rect_min, float2 rect_size,
+                       float coverage)
+{
+    if (fillType == 0)
+        return premultiply(effectColor, opacity * coverage);
+
+    float2 local = (p - rect_min) / max(rect_size, float2(1.0, 1.0));
+    float coordinate = gradient_coordinate(local);
+    float range = max(abs(gradientEndPos - gradientStartPos), 0.0001);
+    float t = (coordinate - gradientStartPos) / range;
+    if (gradientEndPos < gradientStartPos)
+        t = 1.0 - t;
+    t = spread_gradient(t);
+
+    float4 startColor = gradientStartColor;
+    float4 endColor = gradientEndColor;
+    startColor.a *= gradientStartOpacity;
+    endColor.a *= gradientEndOpacity;
+    float4 color = lerp(startColor, endColor, t);
+    return premultiply(color, opacity * gradientOpacity * coverage);
+}
+
+float4 PSBackgroundColor(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float2 p = layer_space_uv(v_in.uv) * max(textureSize, float2(1.0, 1.0));
+    float2 rect_min = backgroundRect.xy;
+    float2 rect_size = max(backgroundRect.zw, float2(1.0, 1.0));
+    float dist = rounded_rect_distance(p, rect_min, rect_size, cornerRadii);
+    float aa = 1.0;
+    float fill_coverage = 1.0 - smoothstep(-aa, aa, dist);
+
+    float4 under = background_fill(p, rect_min, rect_size, fill_coverage);
+
+    if (strokeWidth > 0.001 && strokeOpacity > 0.001) {
+        float inner_dist = dist + strokeWidth;
+        float inner_coverage = 1.0 - smoothstep(-aa, aa, inner_dist);
+        float stroke_coverage = clamp(fill_coverage - inner_coverage, 0.0, 1.0);
+        float4 stroke = premultiply(strokeColor, strokeOpacity * stroke_coverage);
+        under = over(stroke, under);
+    }
+
+    /* Artwork is always composited over the generated background. This keeps
+     * the layer visible even at zero fill opacity or on fallback render paths. */
+    return over(base, under);
+}
+
+technique Draw
+{
+    pass
+    {
+        vertex_shader = VSDefault(v_in);
+        pixel_shader = PSBackgroundColor(v_in);
+    }
+}

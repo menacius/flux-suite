@@ -1,0 +1,9 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "unsharp-mask",
+  "name": "Unsharp Mask",
+  "type": "unsharp-mask",
+  "category": "Effects/Blur & Sharpen"
+}

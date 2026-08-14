@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 948.81 363.98">
+  <defs>
+    <style>
+      .cls-1 { font-size: 30px; }
+      .cls-1, .cls-2, .cls-3 { font-family: Satoshi-Medium, Satoshi; font-weight: 500; }
+      .cls-1, .cls-3 { fill: #fff; }
+      .cls-2 { letter-spacing: .18em; }
+      .cls-2, .cls-4 { fill: #42a274; }
+      .cls-2, .cls-3 { font-size: 41.94px; }
+      .cls-version { letter-spacing: .18em; }
+      .cls-copyright { fill: #fff; font-family: Satoshi-Medium, Satoshi; font-size: 11px; font-weight: 500; letter-spacing: .14em; opacity: .62; }
+      .cls-6 { fill: url(#radial-gradient); }
+      .cls-11 { fill: #121016; }
+    </style>
+    <radialGradient id="radial-gradient" cx="474.4" cy="181.99" fx="-50.93" fy="-24.12" r="761.03" gradientUnits="userSpaceOnUse">
+      <stop offset=".18" stop-color="#143028"/>
+      <stop offset=".48" stop-color="#0d211b"/>
+      <stop offset="1" stop-color="#000"/>
+    </radialGradient>
+  </defs>
+  <g id="Layer_1-2" data-name="Layer 1">
+    <rect class="cls-6" width="948.81" height="363.98" rx="36.9" ry="36.9"/>
+    <rect class="cls-11" x="92.82" y="109.27" width="145.44" height="145.44" rx="18.35" ry="18.35"/>
+    <g>
+      <rect class="cls-4" x="130.42" y="138.99" width="71.72" height="20.32"/>
+      <rect class="cls-4" x="130.42" y="171.83" width="55.82" height="20.32"/>
+      <rect class="cls-4" x="130.42" y="203.45" width="20.32" height="20.32"/>
+    </g>
+    <g>
+      <text class="cls-3" transform="translate(284.18 149.15)"><tspan x="0" y="0">FLUX</tspan></text>
+      <text id="flux-encoder-version" class="cls-1 cls-version" transform="translate(284.18 254.71)"><tspan x="0" y="0">2026 - v0.8.18-alpha</tspan></text>
+      <text id="flux-encoder-copyright" class="cls-copyright" transform="translate(284.18 314)">&#169; 2026 OMNIATV. ALL RIGHTS RESERVED.</text>
+      <text class="cls-2" transform="translate(284.2 203.03)"><tspan x="0" y="0">ENCODER</tspan></text>
+    </g>
+  </g>
+</svg>

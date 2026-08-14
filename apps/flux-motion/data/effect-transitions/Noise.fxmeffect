@@ -1,0 +1,24 @@
+{
+  "format": "obs-fxm-effect-preset",
+  "version": 1,
+  "kind": "effect",
+  "id": "noise",
+  "name": "Noise",
+  "category": ["Effects", "Noise and Grain"],
+  "type": "noise",
+  "parameters": {
+    "profile": 3,
+    "amount": 0.18,
+    "scale": 96.0,
+    "softness": 0.12,
+    "complexity": 5.0,
+    "spread": 2.0,
+    "falloff": 0.52,
+    "speed": 1.0,
+    "evolution": 0.0,
+    "seed": 1,
+    "animated": false,
+    "monochrome": true,
+    "temporalStability": true
+  }
+}

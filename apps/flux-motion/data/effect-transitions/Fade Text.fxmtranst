@@ -1,0 +1,12 @@
+{
+  "format": "flux-motion-text-transition",
+  "version": 1,
+  "id": "text.fade",
+  "name": "Fade Text",
+  "type": "text-fade",
+  "easing": "ease-in-out",
+  "duration": 0.8,
+  "unit": "character",
+  "stagger": 0.5,
+  "category": "Transitions/Text/Fade"
+}

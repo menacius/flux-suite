@@ -1,0 +1,34 @@
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d blurredImage;
+uniform float2 texelSize;
+uniform float4 effectColor;
+uniform float4 secondaryColor;
+uniform float opacity;
+uniform float amount;
+uniform float intensity;
+uniform float softness;
+
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+VertDataOut VSDefault(VertDataIn v_in) { VertDataOut o; o.pos=mul(float4(v_in.pos.xyz,1.0),ViewProj); o.uv=v_in.uv; return o; }
+float4 PSHalation(VertDataOut v_in) : TARGET
+{
+    float4 base = image.Sample(textureSampler, v_in.uv);
+    float2 shift = texelSize * (1.0 + saturate(softness) * 3.0);
+    float4 broad = blurredImage.Sample(textureSampler, v_in.uv);
+    float red = blurredImage.Sample(textureSampler, v_in.uv + float2(shift.x, 0.0)).r;
+    float green = blurredImage.Sample(textureSampler, v_in.uv - float2(0.0, shift.y)).g;
+    float3 halo = max(broad.rgb - base.rgb * 0.35, float3(0.0, 0.0, 0.0));
+    halo.r = max(halo.r, red);
+    halo.g = max(halo.g * 0.42, green * 0.20);
+    halo.b *= 0.10;
+    float3 tint = lerp(effectColor.rgb, secondaryColor.rgb, 0.18);
+    float gain = max(intensity, 0.0) * max(amount, 0.0) * clamp(opacity, 0.0, 1.0) * effectColor.a;
+    float3 output_rgb = base.rgb + halo * tint * gain;
+    float output_alpha = saturate(base.a + broad.a * gain * 0.18 * (1.0 - base.a));
+    return float4(output_rgb, output_alpha);
+}
+technique HalationComposite { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSHalation(v_in); } }
+technique Draw { pass { vertex_shader = VSDefault(v_in); pixel_shader = PSHalation(v_in); } }

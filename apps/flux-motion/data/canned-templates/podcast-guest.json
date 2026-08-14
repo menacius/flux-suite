@@ -1,0 +1,10 @@
+{
+  "id": 202,
+  "title": "Podcast Guest",
+  "description": "Relaxed guest identification with a short role line.",
+  "default_name": "GUEST NAME",
+  "category": "Podcast",
+  "subcategory": "Lower Thirds",
+  "collection": "Casual Podcast",
+  "file_name": "podcast-guest.fxmt"
+}

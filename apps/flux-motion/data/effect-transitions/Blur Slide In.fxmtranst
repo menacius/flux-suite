@@ -1,0 +1,17 @@
+{
+  "format": "flux-motion-text-transition",
+  "version": 1,
+  "id": "text.blur-slide-in",
+  "name": "Blur Slide In/Out",
+  "type": "text-blur-slide",
+  "easing": "ease-in-out",
+  "duration": 1.0,
+  "unit": "character",
+  "direction": "up",
+  "offset": 65,
+  "blur": 22,
+  "stagger": 0.5,
+  "fade": true,
+  "cropToUnitBounds": false,
+  "category": "Transitions/Text/Slide"
+}
