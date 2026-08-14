@@ -3,6 +3,8 @@
 Flux Suite is the monorepo for Flux desktop applications, host plugins, shared
 runtime code, build tooling, and release infrastructure.
 
+Product page and downloads: [software.omniatv.com/flux-suite](https://software.omniatv.com/flux-suite/)
+
 ## Repository layout
 
 - `apps/` contains independently versioned desktop applications.
