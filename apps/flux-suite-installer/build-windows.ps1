@@ -113,7 +113,7 @@ if (-not $SkipSetup) {
     $SetupScript = Join-Path $SourceDir 'setup\flux-suite.iss'
     Write-Host 'Building first-run Flux Suite Setup' -ForegroundColor Cyan
     & $InnoCompiler "/DFluxSourceDir=$OutputDir" "/DFluxSetupOutputDir=$SetupOutputDir" `
-        "/DFluxAppVersion=$VersionLabel" "/DFluxNumericVersion=0.8.19.0" `
+        "/DFluxAppVersion=$VersionLabel" "/DFluxNumericVersion=0.8.19.1" `
         "/DFluxOutputBaseFilename=$OutputBaseFilename" $SetupScript
     if ($LASTEXITCODE -ne 0) { throw 'First-run setup build failed.' }
     $SetupExecutable = Join-Path $SetupOutputDir "$OutputBaseFilename.exe"

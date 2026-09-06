@@ -5,13 +5,13 @@
   #define FluxSetupOutputDir "..\..\..\out\dist\windows-x64\Flux Installer Setup"
 #endif
 #ifndef FluxAppVersion
-  #define FluxAppVersion "2026 - v0.8.19-alpha"
+  #define FluxAppVersion "2026 - v0.8.19-1-alpha"
 #endif
 #ifndef FluxNumericVersion
-  #define FluxNumericVersion "0.8.19.0"
+  #define FluxNumericVersion "0.8.19.1"
 #endif
 #ifndef FluxOutputBaseFilename
-  #define FluxOutputBaseFilename "Flux_Suite_Setup_2026_-_v0.8.19-alpha_windows-x64"
+  #define FluxOutputBaseFilename "Flux_Suite_Setup_2026_-_v0.8.19-1-alpha_windows-x64"
 #endif
 
 [Setup]
@@ -87,6 +87,48 @@ const
   FluxText = $00F8F3F4;
   FluxMuted = $00B3A6AA;
   FluxAccent = $00F55572;
+  FluxUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{5CB6E94C-6922-4CC7-A4D4-AB70A7F9F4E2}_is1';
+
+function RemovePreviousSuite(RootKey: Integer): Boolean;
+var
+  Uninstaller: String;
+  ClosingQuote: Integer;
+  ResultCode: Integer;
+begin
+  Result := True;
+  if not RegQueryStringValue(RootKey, FluxUninstallKey,
+      'UninstallString', Uninstaller) then
+    exit;
+
+  Uninstaller := Trim(Uninstaller);
+  if (Length(Uninstaller) > 1) and (Uninstaller[1] = '"') then
+  begin
+    Delete(Uninstaller, 1, 1);
+    ClosingQuote := Pos('"', Uninstaller);
+    if ClosingQuote > 0 then
+      SetLength(Uninstaller, ClosingQuote - 1);
+  end;
+  if not FileExists(Uninstaller) then
+    exit;
+
+  Result := Exec(Uninstaller,
+    '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE,
+    ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  { A fixed AppId is stored in a different registry hive for per-user and
+    all-user installs. Remove both registrations so upgrades, downgrades and
+    scope changes never leave two Suite installers behind. }
+  if not RemovePreviousSuite(HKCU) then
+    Result := 'Could not remove the previous per-user Flux Suite installation.'
+  else if not RemovePreviousSuite(HKLM64) then
+    Result := 'Could not remove the previous system-wide Flux Suite installation.'
+  else if not RemovePreviousSuite(HKLM) then
+    Result := 'Could not remove the previous system-wide Flux Suite installation.';
+end;
 
 procedure InitializeWizard;
 var

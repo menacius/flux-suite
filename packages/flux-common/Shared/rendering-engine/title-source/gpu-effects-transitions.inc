@@ -972,7 +972,248 @@ technique Accumulate
 }
 )";
 
+/* Keep the overwhelmingly common unlit path deliberately small.  Compiling the
+ * lighting/shadow implementation as part of every layer copy made D3DCompiler
+ * spend minutes optimizing code that ordinary 2D titles never execute. */
 static constexpr const char *kGpuLayerCopyEffect = R"(
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture2d transitionMatte;
+uniform float weight;
+uniform float wipeProgress;
+uniform float wipeSoftness;
+uniform int wipeDirection;
+uniform int transitionType;
+uniform int blocksColumns;
+uniform int blocksRows;
+uniform float randomSeed;
+uniform int transitionMatteEnabled;
+uniform int imageChannel;
+uniform int transitionInvert;
+uniform int transitionClockwise;
+uniform float2 transitionCenter;
+uniform float transitionRotation;
+uniform float transitionAspect;
+uniform int transitionProfile;
+uniform int imageClipEnabled;
+uniform float4 imageClipRect;
+uniform float4 imageCornerRadii;
+uniform float2 imageLogicalSize;
+uniform float2 sourceTexelSize;
+uniform int imageScaleFilter;
+uniform texture2d postProjectionMask;
+uniform int postProjectionMaskEnabled;
+uniform int postProjectionMaskMode;
+sampler_state textureSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
+sampler_state pointSampler { Filter = Point; AddressU = Clamp; AddressV = Clamp; };
+struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
+struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; float4 clipPos : TEXCOORD1; };
+VertDataOut VSDefault(VertDataIn v)
+{
+    VertDataOut o;
+    o.pos = mul(float4(v.pos.xyz, 1.0), ViewProj);
+    o.clipPos = o.pos;
+    o.uv = v.uv;
+    return o;
+}
+float hash21(float2 p)
+{
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32 + randomSeed);
+    return frac(p.x * p.y);
+}
+float directional_wipe(float2 uv, float reveal, float feather)
+{
+    if (wipeDirection == 2) {
+        float edge = 1.0 - reveal;
+        return wipeSoftness > 0.000001 ? smoothstep(edge, edge + feather, uv.x) : step(edge, uv.x);
+    }
+    if (wipeDirection == 3) {
+        float edge = 1.0 - reveal;
+        return wipeSoftness > 0.000001 ? smoothstep(edge, edge + feather, uv.y) : step(edge, uv.y);
+    }
+    if (wipeDirection == 4)
+        return wipeSoftness > 0.000001 ? 1.0 - smoothstep(reveal - feather, reveal, uv.y) : 1.0 - step(reveal, uv.y);
+    return wipeSoftness > 0.000001 ? 1.0 - smoothstep(reveal - feather, reveal, uv.x) : 1.0 - step(reveal, uv.x);
+}
+float transition_alpha(float2 uv)
+{
+    float reveal = clamp(wipeProgress, 0.0, 1.0);
+    if (reveal >= 0.999999)
+        return 1.0;
+    float feather = max(wipeSoftness, 0.000001);
+    float alpha = 1.0;
+    if (transitionType == 14) {
+        float2 grid = float2(max(blocksColumns, 1), max(blocksRows, 1));
+        float threshold = hash21(floor(uv * grid));
+        if (transitionInvert != 0) threshold = 1.0 - threshold;
+        alpha = wipeSoftness > 0.000001 ? smoothstep(threshold - feather, threshold + feather, reveal) : step(threshold, reveal);
+    } else if (transitionType == 15) {
+        float matte = uv.x;
+        if (transitionMatteEnabled != 0) {
+            float4 m = transitionMatte.Sample(textureSampler, uv);
+            if (imageChannel == 1) matte = m.a;
+            else if (imageChannel == 2) matte = m.r;
+            else if (imageChannel == 3) matte = m.g;
+            else if (imageChannel == 4) matte = m.b;
+            else matte = dot(m.rgb, float3(0.2126, 0.7152, 0.0722));
+        }
+        if (transitionInvert != 0) matte = 1.0 - matte;
+        alpha = smoothstep(matte - feather, matte + feather, reveal);
+    } else if (transitionType == 16) {
+        float2 p = uv - transitionCenter;
+        float angle = frac(atan2(p.y, p.x) / 6.28318530718 + 1.5 + transitionRotation / 360.0);
+        if (transitionClockwise == 0) angle = 1.0 - angle;
+        if (transitionInvert != 0) angle = 1.0 - angle;
+        alpha = smoothstep(angle - feather, angle + feather, reveal);
+    } else if (transitionType == 17) {
+        float2 p = (uv - transitionCenter) * 2.0;
+        p.x *= max(transitionAspect, 0.01);
+        float d = length(p) / 1.41421356;
+        if (transitionProfile == 1) d = max(abs(p.x), abs(p.y));
+        else if (transitionProfile == 2) d = (abs(p.x) + abs(p.y)) * 0.5;
+        d = clamp(d, 0.0, 1.0);
+        if (transitionInvert != 0) d = 1.0 - d;
+        alpha = smoothstep(d - feather, d + feather, reveal);
+    } else if (transitionType == 18) {
+        float2 p = uv - transitionCenter;
+        float radians = transitionRotation * 0.01745329252;
+        float2 q = float2(p.x * cos(radians) - p.y * sin(radians), p.x * sin(radians) + p.y * cos(radians));
+        q.x *= max(transitionAspect, 0.01);
+        float matte = q.x + 0.5;
+        if (transitionProfile == 1) matte = length(q) * 1.41421356;
+        else if (transitionProfile == 2) matte = abs(q.x) + abs(q.y);
+        matte = clamp(matte, 0.0, 1.0);
+        if (transitionInvert != 0) matte = 1.0 - matte;
+        alpha = smoothstep(matte - feather, matte + feather, reveal);
+    } else if (wipeDirection != 0) {
+        alpha = directional_wipe(uv, reveal, feather);
+    }
+    return clamp(alpha, 0.0, 1.0);
+}
+float rounded_box_alpha(float2 p, float4 rect, float4 radii)
+{
+    float2 rectMin = rect.xy;
+    float2 rectMax = rect.xy + rect.zw;
+    if (p.x < rectMin.x || p.y < rectMin.y || p.x > rectMax.x || p.y > rectMax.y)
+        return 0.0;
+    float2 local = p - rectMin;
+    float2 size = max(rect.zw, float2(0.0001, 0.0001));
+    float maxRadius = min(size.x, size.y) * 0.5;
+    float4 r = clamp(radii, 0.0, maxRadius);
+    float radius = 0.0;
+    float2 center = float2(0.0, 0.0);
+    if (local.x <= r.x && local.y <= r.x) { radius = r.x; center = float2(radius, radius); }
+    else if (local.x >= size.x - r.y && local.y <= r.y) { radius = r.y; center = float2(size.x - radius, radius); }
+    else if (local.x >= size.x - r.z && local.y >= size.y - r.z) { radius = r.z; center = float2(size.x - radius, size.y - radius); }
+    else if (local.x <= r.w && local.y >= size.y - r.w) { radius = r.w; center = float2(radius, size.y - radius); }
+    else return 1.0;
+    if (radius <= 0.0001) return 1.0;
+    return 1.0 - smoothstep(max(0.0, radius - 1.0), radius + 1.0, length(local - center));
+}
+float projected_mask_alpha(VertDataOut v)
+{
+    if (postProjectionMaskEnabled == 0 || abs(v.clipPos.w) <= 0.000001)
+        return 1.0;
+    float2 ndc = v.clipPos.xy / v.clipPos.w;
+    float2 screenUv = float2(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
+    float4 m = postProjectionMask.Sample(textureSampler, clamp(screenUv, 0.0, 1.0));
+    float value = m.a;
+    if (postProjectionMaskMode == 3 || postProjectionMaskMode == 4) {
+        float3 straight = m.a > 0.000001 ? m.rgb / m.a : float3(0.0, 0.0, 0.0);
+        value = dot(straight, float3(0.2126, 0.7152, 0.0722)) * m.a;
+    }
+    if (postProjectionMaskMode == 2 || postProjectionMaskMode == 4 || postProjectionMaskMode == 6)
+        value = 1.0 - value;
+    return clamp(value, 0.0, 1.0);
+}
+float cubic_weight(float x)
+{
+    x = abs(x);
+    float x2 = x * x;
+    float x3 = x2 * x;
+    if (x <= 1.0) return 1.5 * x3 - 2.5 * x2 + 1.0;
+    if (x < 2.0) return -0.5 * x3 + 2.5 * x2 - 4.0 * x + 2.0;
+    return 0.0;
+}
+float sinc_approx(float x)
+{
+    x = abs(x);
+    if (x < 0.0001) return 1.0;
+    float pix = 3.14159265359 * x;
+    return sin(pix) / pix;
+}
+float lanczos_weight(float x)
+{
+    x = abs(x);
+    if (x >= 3.0) return 0.0;
+    return sinc_approx(x) * sinc_approx(x / 3.0);
+}
+float4 sample_cubic(float2 uv)
+{
+    float2 texel = max(sourceTexelSize, float2(0.000001, 0.000001));
+    float2 size = 1.0 / texel;
+    float2 pixel = uv * size - 0.5;
+    float2 base = floor(pixel);
+    float2 f = pixel - base;
+    float4 sum = float4(0.0, 0.0, 0.0, 0.0);
+    float total = 0.0;
+    for (int y = -1; y <= 2; ++y) {
+        float wy = cubic_weight(float(y) - f.y);
+        for (int x = -1; x <= 2; ++x) {
+            float w = cubic_weight(float(x) - f.x) * wy;
+            sum += image.Sample(pointSampler, clamp((base + float2(x, y) + 0.5) * texel, 0.0, 1.0)) * w;
+            total += w;
+        }
+    }
+    return total > 0.000001 ? sum / total : image.Sample(textureSampler, uv);
+}
+float4 sample_lanczos(float2 uv)
+{
+    float2 texel = max(sourceTexelSize, float2(0.000001, 0.000001));
+    float2 size = 1.0 / texel;
+    float2 pixel = uv * size - 0.5;
+    float2 base = floor(pixel);
+    float2 f = pixel - base;
+    float4 sum = float4(0.0, 0.0, 0.0, 0.0);
+    float total = 0.0;
+    for (int y = -2; y <= 3; ++y) {
+        float wy = lanczos_weight(float(y) - f.y);
+        for (int x = -2; x <= 3; ++x) {
+            float w = lanczos_weight(float(x) - f.x) * wy;
+            sum += image.Sample(pointSampler, clamp((base + float2(x, y) + 0.5) * texel, 0.0, 1.0)) * w;
+            total += w;
+        }
+    }
+    return total > 0.000001 ? sum / total : image.Sample(textureSampler, uv);
+}
+float4 sample_scaled_image(float2 uv)
+{
+    if (imageScaleFilter == 0) return image.Sample(pointSampler, uv);
+    if (imageScaleFilter == 2) return sample_cubic(uv);
+    if (imageScaleFilter == 3) return sample_lanczos(uv);
+    return image.Sample(textureSampler, uv);
+}
+float4 layer_color(VertDataOut v)
+{
+    float clipAlpha = 1.0;
+    if (imageClipEnabled != 0)
+        clipAlpha = rounded_box_alpha(v.uv * imageLogicalSize, imageClipRect, imageCornerRadii);
+    return sample_scaled_image(v.uv) *
+        (weight * transition_alpha(v.uv) * clipAlpha * projected_mask_alpha(v));
+}
+float4 PSLayer(VertDataOut v) : TARGET { return layer_color(v); }
+float4 PSDepthLayer(VertDataOut v) : TARGET
+{
+    float4 color = layer_color(v);
+    clip(color.a - 0.0039215686);
+    return color;
+}
+technique Draw { pass { vertex_shader = VSDefault(v); pixel_shader = PSLayer(v); } }
+technique DepthDraw { pass { vertex_shader = VSDefault(v); pixel_shader = PSDepthLayer(v); } }
+)";
+
+static constexpr const char *kGpuLitLayerCopyEffect = R"(
 uniform float4x4 ViewProj;
 uniform texture2d image;
 uniform texture2d transitionMatte;

@@ -38,6 +38,8 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 #ifdef Q_OS_WIN
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -783,10 +785,70 @@ QString InstallerWindow::installPathFor(const Product &product) const
     return QDir(m_applicationInstallRoot).filePath(product.installFolder);
 }
 
+QStringList InstallerWindow::installCandidatesFor(const Product &product) const
+{
+    QStringList raw{installPathFor(product)};
+    if (product.kind == QStringLiteral("obs-plugin")) {
+        for (const auto &root : {
+                 appDataEnvironment("ProgramData", QStandardPaths::GenericDataLocation),
+                 appDataEnvironment("APPDATA", QStandardPaths::AppDataLocation)}) {
+            const QDir plugins(QDir(root).filePath(QStringLiteral("obs-studio/plugins")));
+            raw << plugins.filePath(product.installFolder)
+                << plugins.filePath(QStringLiteral("broadcast-graphics-live"));
+        }
+    } else {
+        const QString programFiles = qEnvironmentVariable("ProgramFiles");
+        const QString localAppData = appDataEnvironment(
+            "LOCALAPPDATA", QStandardPaths::AppLocalDataLocation);
+        if (!programFiles.isEmpty())
+            raw << QDir(programFiles).filePath(
+                QStringLiteral("Flux Suite/") + product.installFolder);
+        raw << QDir(localAppData).filePath(
+            QStringLiteral("Flux Suite/") + product.installFolder);
+    }
+    QStringList result;
+    QSet<QString> seen;
+    for (const QString &path : raw) {
+        const QString clean = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+        if (!seen.contains(clean.toCaseFolded())) {
+            seen.insert(clean.toCaseFolded());
+            result.append(clean);
+        }
+    }
+    return result;
+}
+
+QStringList InstallerWindow::installedPathsFor(const Product &product) const
+{
+    QStringList result;
+    for (const QString &root : installCandidatesFor(product)) {
+        const bool current = QFileInfo(
+            QDir(root).filePath(product.executable)).isFile();
+        const bool legacy = product.kind == QStringLiteral("obs-plugin") &&
+            QFileInfo(QDir(root).filePath(QStringLiteral(
+                "bin/64bit/broadcast-graphics-live.dll"))).isFile();
+        if (current || legacy)
+            result.append(root);
+    }
+    return result;
+}
+
+QString InstallerWindow::installedPathFor(const Product &product) const
+{
+    const QString selected = QDir::cleanPath(
+        QFileInfo(installPathFor(product)).absoluteFilePath());
+    const QStringList installed = installedPathsFor(product);
+    for (const QString &root : installed) {
+        if (root.compare(selected, Qt::CaseInsensitive) == 0)
+            return root;
+    }
+    return installed.isEmpty() ? QString() : installed.first();
+}
+
 QString InstallerWindow::installedVersion(const Product &product) const
 {
-    const QString root = installPathFor(product);
-    if (!QFileInfo(QDir(root).filePath(product.executable)).isFile()) {
+    const QString root = installedPathFor(product);
+    if (root.isEmpty()) {
         return {};
     }
     QFile receipt(QDir(root).filePath(QStringLiteral(".flux-install.json")));
@@ -806,7 +868,7 @@ QString InstallerWindow::installedVersion(const Product &product) const
 
 QString InstallerWindow::installedPackageHash(const Product &product) const
 {
-    QFile receipt(QDir(installPathFor(product)).filePath(QStringLiteral(".flux-install.json")));
+    QFile receipt(QDir(installedPathFor(product)).filePath(QStringLiteral(".flux-install.json")));
     if (!receipt.open(QIODevice::ReadOnly)) return {};
     return QJsonDocument::fromJson(receipt.readAll()).object()
         .value(QStringLiteral("sha256")).toString().toLower();
@@ -830,7 +892,8 @@ ProductState InstallerWindow::stateFor(const Product &product) const
     // repair/update so they acquire a verifiable build identity.
     const bool sameBuild = !product.sha256.isEmpty()
         && installedHash == product.sha256.toLower();
-    return installed == product.version && sameBuild
+    const bool duplicateInstall = installedPathsFor(product).size() > 1;
+    return installed == product.version && sameBuild && !duplicateInstall
         ? ProductState::Installed : ProductState::UpdateAvailable;
 }
 
@@ -923,7 +986,15 @@ void InstallerWindow::startProductRelease(const Product &product)
         refreshCard(product);
     }
     m_installAll->setEnabled(false);
-    if (m_systemWideInstall || product.kind == QStringLiteral("obs-plugin")) {
+    const QString programFiles = qEnvironmentVariable("ProgramFiles");
+    const QStringList existingInstalls = installedPathsFor(product);
+    const bool oldSystemInstall = !programFiles.isEmpty() &&
+        std::any_of(existingInstalls.cbegin(), existingInstalls.cend(),
+                    [&programFiles](const QString &path) {
+                        return path.startsWith(programFiles, Qt::CaseInsensitive);
+                    });
+    if (m_systemWideInstall || product.kind == QStringLiteral("obs-plugin") ||
+        oldSystemInstall) {
         startElevatedProductInstall(product);
         return;
     }
@@ -996,7 +1067,7 @@ void InstallerWindow::startNextQueuedProduct()
 
 void InstallerWindow::launchProduct(const Product &product)
 {
-    const QString executable = QDir(installPathFor(product)).filePath(product.executable);
+    const QString executable = QDir(installedPathFor(product)).filePath(product.executable);
     if (!QProcess::startDetached(executable, {}, QFileInfo(executable).absolutePath())) {
         setGlobalMessage(QStringLiteral("Could not open %1.").arg(product.name), true);
     }
@@ -1071,7 +1142,7 @@ void InstallerWindow::showProductMenu(const Product &product, QPushButton *ancho
     QAction *copyVersion = menu.addAction(QStringLiteral("Copy version"));
     QAction *selected = menu.exec(anchor->mapToGlobal(QPoint(0, anchor->height() + 5)));
     if (selected == folder) {
-        QDesktopServices::openUrl(QUrl::fromLocalFile(installPathFor(product)));
+        QDesktopServices::openUrl(QUrl::fromLocalFile(installedPathFor(product)));
     } else if (selected == reinstall) {
         startProduct(product.id);
     } else if (uninstall && selected == uninstall) {
@@ -1098,7 +1169,7 @@ void InstallerWindow::uninstallProduct(const Product &product)
     if (prompt.exec() != QDialog::Accepted) return;
     if (m_cards.contains(product.id)) m_cards[product.id].state = ProductState::Working;
     m_installAll->setEnabled(false);
-    m_engine.startUninstall(product, installPathFor(product));
+    m_engine.startUninstall(product, installedPathFor(product));
 }
 
 void InstallerWindow::beginSelfUpdate()

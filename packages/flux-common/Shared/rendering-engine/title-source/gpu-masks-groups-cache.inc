@@ -207,6 +207,7 @@
      * whole frame and could make Preview/Program output disappear. */
     gs_effect_t *blit_effect = nullptr;
     gs_effect_t *copy_effect = nullptr;
+    gs_effect_t *lit_copy_effect = nullptr;
     gs_effect_t *shadow_effect = nullptr;
     gs_effect_t *motion_composite_effect = nullptr;
     gs_effect_t *adjustment_mix_effect = nullptr;

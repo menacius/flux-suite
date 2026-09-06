@@ -1,4 +1,9 @@
-# 2026 - v0.8.19-alpha
+# 2026 - v0.8.19-1-alpha
+
+- Split ordinary 2D layer copying from the advanced lighting/shadow shader to
+  prevent long D3D compilation stalls on affected Windows systems.
+- Added the legacy Broadcast Graphics Live source identifier so existing OBS
+  scene collections continue to load after upgrading.
 
 - Kept new OBS-created titles on the active OBS resolution and frame-rate
   defaults without showing the standalone New Title format dialog.

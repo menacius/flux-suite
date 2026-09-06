@@ -39,7 +39,7 @@ flux_extract_semver("${FLUX_MOTION_OBS_VERSION_LABEL}"
 # Manually assigned development delivery identifier. Update this once for each
 # package handed to the user. It is intentionally source-controlled and does
 # not change when the same checkout is rebuilt.
-set(OBS_FXM_DEVELOPMENT_VERSION "419")
+set(OBS_FXM_DEVELOPMENT_VERSION "420")
 
 # ── C++ standard ────────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 17)
