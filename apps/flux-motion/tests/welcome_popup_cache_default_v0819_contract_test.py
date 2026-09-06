@@ -44,7 +44,7 @@ assert "std::atomic_bool cache_enabled_{true}" in cache
 
 # This delivery explicitly keeps the existing public/development version.
 assert "project(flux-motion VERSION 0.8.19)" in cmake
-assert 'set(OBS_FXM_DEVELOPMENT_VERSION "419")' in cmake
-assert version == "2026 - v0.8.19-alpha"
+assert 'set(OBS_FXM_DEVELOPMENT_VERSION "420")' in cmake
+assert version == "2026 - v0.8.19-1-alpha"
 
 print("Welcome popup and first-install prerender default contract passed")

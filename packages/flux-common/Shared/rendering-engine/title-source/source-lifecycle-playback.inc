@@ -563,6 +563,8 @@ void title_gpu_render_session_destroy(TitleGpuRenderSession *session)
         gs_effect_destroy(session->blit_effect);
     if (session->copy_effect)
         gs_effect_destroy(session->copy_effect);
+    if (session->lit_copy_effect)
+        gs_effect_destroy(session->lit_copy_effect);
     if (session->shadow_effect)
         gs_effect_destroy(session->shadow_effect);
     if (session->motion_composite_effect)

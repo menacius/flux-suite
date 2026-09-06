@@ -1,4 +1,11 @@
-# 2026 - v0.8.19-alpha
+# 2026 - v0.8.19-1-alpha
+
+- Added cross-scope installation discovery and cleanup, including saved custom
+  roots and both OBS plugin locations, before activating a verified package.
+- Added removal of the retired Broadcast Graphics Live plugin and retained its
+  source identifier through the current Flux Motion OBS plugin.
+- Made the Suite bootstrapper remove prior per-user and system-wide Suite
+  registrations before upgrades, downgrades, or installation-scope changes.
 
 - Kept each product's latest changelog link visible after installation and
   updates complete.

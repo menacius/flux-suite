@@ -12,6 +12,8 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QSaveFile>
+#include <QSettings>
+#include <QSet>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QThread>
@@ -41,6 +43,64 @@ bool receiptMatches(const QString &root, const Product &product)
                    .value(QStringLiteral("product")).toString() == product.id;
     }
     return QFileInfo(QDir(root).filePath(product.executable)).isFile();
+}
+
+bool legacyPluginMatches(const QString &root, const Product &product)
+{
+    return product.kind == QStringLiteral("obs-plugin") &&
+        QFileInfo(QDir(root).filePath(
+            QStringLiteral("bin/64bit/broadcast-graphics-live.dll"))).isFile();
+}
+
+QStringList installationCandidates(const Product &product, const QString &target)
+{
+    QStringList raw{target};
+    if (product.kind == QStringLiteral("obs-plugin")) {
+        const QStringList dataRoots{
+            qEnvironmentVariable("ProgramData"),
+            qEnvironmentVariable("APPDATA")};
+        for (const QString &dataRoot : dataRoots) {
+            if (dataRoot.isEmpty()) continue;
+            const QDir plugins(QDir(dataRoot).filePath(
+                QStringLiteral("obs-studio/plugins")));
+            raw << plugins.filePath(product.installFolder)
+                << plugins.filePath(QStringLiteral("broadcast-graphics-live"));
+        }
+    } else {
+        const QString programFiles = qEnvironmentVariable("ProgramFiles");
+        const QString localAppData = qEnvironmentVariable("LOCALAPPDATA");
+        if (!programFiles.isEmpty())
+            raw << QDir(programFiles).filePath(
+                QStringLiteral("Flux Suite/") + product.installFolder);
+        if (!localAppData.isEmpty())
+            raw << QDir(localAppData).filePath(
+                QStringLiteral("Flux Suite/") + product.installFolder);
+        const QString savedRoot = QSettings().value(
+            QStringLiteral("installation/root")).toString();
+        if (!savedRoot.isEmpty())
+            raw << QDir(savedRoot).filePath(product.installFolder);
+    }
+
+    QStringList result;
+    QSet<QString> seen;
+    for (const QString &candidate : raw) {
+        if (candidate.isEmpty()) continue;
+        const QString clean = QDir::cleanPath(QFileInfo(candidate).absoluteFilePath());
+        const QString key = clean.toCaseFolded();
+        if (!seen.contains(key)) {
+            seen.insert(key);
+            result.append(clean);
+        }
+    }
+    return result;
+}
+
+bool safelyIdentifiesInstallation(const QString &root, const Product &product)
+{
+    const QFileInfo target(root);
+    return target.absoluteFilePath().length() >= 12 &&
+        target.absoluteFilePath() != target.absolutePath() &&
+        (receiptMatches(root, product) || legacyPluginMatches(root, product));
 }
 }
 
@@ -157,6 +217,27 @@ InstallEngine::Result InstallEngine::performInstall(Product product, QString app
         return {false, QStringLiteral("Package is incomplete; missing %1").arg(product.executable)};
     }
 
+    /* Once the replacement has been completely verified and staged, remove
+     * every installation of this product outside the selected target.  This
+     * covers scope changes, downgrades, custom roots and the retired BGL OBS
+     * plugin; activateStaging retains rollback protection for the target. */
+    const QString cleanTarget = QDir::cleanPath(QFileInfo(installPath).absoluteFilePath());
+    for (const QString &oldRoot : installationCandidates(product, installPath)) {
+        if (oldRoot.compare(cleanTarget, Qt::CaseInsensitive) == 0 ||
+            !QFileInfo::exists(oldRoot))
+            continue;
+        if (!safelyIdentifiesInstallation(oldRoot, product))
+            continue;
+        if (product.kind == QStringLiteral("application"))
+            FileAssociations::unregisterForProduct(product, oldRoot);
+        if (!removeTree(oldRoot)) {
+            removeTree(stagingPath);
+            return {false, QStringLiteral(
+                "Could not remove the previous installation at %1. Close Flux applications and OBS Studio, then try again.")
+                .arg(oldRoot)};
+        }
+    }
+
     Q_EMIT stageChanged(product.id, QStringLiteral("activate"),
                         QStringLiteral("Finalizing %1").arg(product.name));
     if (!activateStaging(stagingPath, product, installPath, &error)) {
@@ -191,19 +272,26 @@ InstallEngine::Result InstallEngine::performUninstall(Product product, QString i
 {
     Q_EMIT stageChanged(product.id, QStringLiteral("uninstall"),
                         QStringLiteral("Removing %1").arg(product.name));
-    const QFileInfo target(installPath);
-    if (target.absoluteFilePath().length() < 12 || target.absoluteFilePath() == target.absolutePath()
-        || !receiptMatches(installPath, product)) {
+    QStringList installedRoots;
+    for (const QString &root : installationCandidates(product, installPath)) {
+        if (QFileInfo::exists(root) && safelyIdentifiesInstallation(root, product))
+            installedRoots.append(root);
+    }
+    if (installedRoots.isEmpty()) {
         return {false, QStringLiteral("Uninstall refused because the installation could not be safely identified.")};
     }
-    if (!removeTree(installPath)) {
-        return {false, QStringLiteral("Could not remove %1. Close the application and OBS Studio, then try again.")
-                           .arg(product.name)};
+    for (const QString &root : installedRoots) {
+        if (product.kind == QStringLiteral("application"))
+            FileAssociations::unregisterForProduct(product, root);
+        if (!removeTree(root)) {
+            return {false, QStringLiteral("Could not remove %1 from %2. Close the application and OBS Studio, then try again.")
+                               .arg(product.name, root)};
+        }
+        removeTree(QDir(QFileInfo(root).absolutePath()).filePath(
+            QStringLiteral(".flux-archives/") + product.id));
     }
-    removeTree(QDir(target.absolutePath()).filePath(QStringLiteral(".flux-archives/") + product.id));
     if (product.kind == QStringLiteral("application")) {
         removeStartMenuShortcut(product);
-        FileAssociations::unregisterForProduct(product, installPath);
     }
     Q_EMIT progressChanged(product.id, 1, 1);
     return {true, QStringLiteral("%1 was uninstalled.").arg(product.name)};

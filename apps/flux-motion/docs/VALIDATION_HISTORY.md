@@ -54,7 +54,7 @@ deliveries because they included contracts pinned to Development Version 243,
 obsolete exact source tokens, unavailable `g++`, or incomplete runtime DLL
 paths. These are test-maintenance records, not current production requirements.
 
-## Current audit: v0.8.19-alpha, Development Version 419
+## Current audit: v0.8.19-1-alpha, Development Version 420
 
 - Flux Motion OBS plugin: Release compile passed.
 - Flux Motion Editor and renderer: Release compile passed.

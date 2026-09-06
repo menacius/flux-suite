@@ -2650,5 +2650,12 @@ void title_source_register()
     si.media_get_state    = source_media_get_state;
 
     obs_register_source(&si);
-    blog(LOG_INFO, "[Flux Motion] Source type registered.");
+
+    /* Preserve scene collections created with Broadcast Graphics Live.  The
+     * installer can now remove that obsolete binary without turning legacy
+     * sources into placeholders in OBS. */
+    static obs_source_info legacy_si = si;
+    legacy_si.id = "broadcast_graphics_live_source";
+    obs_register_source(&legacy_si);
+    blog(LOG_INFO, "[Flux Motion] Source types registered (Flux Motion + legacy compatibility).");
 }

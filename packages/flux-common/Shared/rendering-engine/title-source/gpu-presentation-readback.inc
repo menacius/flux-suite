@@ -1630,26 +1630,41 @@ static bool draw_gpu_layer_texture(TitleGpuRenderSession *session,
     const double resolved_time = gpu_layer_render_time(title, layer, title_time);
     if (!session || !texture || weight <= 0.0f)
         return false;
-    if (!session->copy_effect &&
+    const bool lighting_enabled = title.lighting_enabled &&
+        layer.material_accepts_lights &&
+        fxm::transform3d::layer_supports_3d(layer) &&
+        fxm::transform3d::layer_or_ancestor_uses_3d(title, layer);
+    gs_effect_t *&effect_slot = lighting_enabled
+        ? session->lit_copy_effect : session->copy_effect;
+    const char *effect_id = lighting_enabled
+        ? "core:lit-layer-copy" : "core:layer-copy";
+    const char *effect_label = lighting_enabled
+        ? "GPU lit layer copy" : "GPU layer copy";
+    const char *effect_source = lighting_enabled
+        ? kGpuLitLayerCopyEffect : kGpuLayerCopyEffect;
+    const char *effect_file = lighting_enabled
+        ? "obs-fxm-gpu-lit-layer-copy.effect"
+        : "obs-fxm-gpu-layer-copy.effect";
+    if (!effect_slot &&
         !ensure_session_shader_effect(
-            session, session->copy_effect, "core:layer-copy",
-            "GPU layer copy", kGpuLayerCopyEffect,
-            "obs-fxm-gpu-layer-copy.effect", &session->copy_effect))
+            session, effect_slot, effect_id, effect_label, effect_source,
+            effect_file, &effect_slot))
         return false;
-    gs_eparam_t *image = fxm_effect_param(session->copy_effect, "image");
-    gs_eparam_t *weight_param = fxm_effect_param(session->copy_effect, "weight");
-    gs_eparam_t *clip_enabled = fxm_effect_param(session->copy_effect, "imageClipEnabled");
-    gs_eparam_t *clip_rect = fxm_effect_param(session->copy_effect, "imageClipRect");
-    gs_eparam_t *corner_radii = fxm_effect_param(session->copy_effect, "imageCornerRadii");
-    gs_eparam_t *logical_size = fxm_effect_param(session->copy_effect, "imageLogicalSize");
-    gs_eparam_t *source_texel_size = fxm_effect_param(session->copy_effect, "sourceTexelSize");
-    gs_eparam_t *image_scale_filter = fxm_effect_param(session->copy_effect, "imageScaleFilter");
+    gs_effect_t *layer_effect = effect_slot;
+    gs_eparam_t *image = fxm_effect_param(layer_effect, "image");
+    gs_eparam_t *weight_param = fxm_effect_param(layer_effect, "weight");
+    gs_eparam_t *clip_enabled = fxm_effect_param(layer_effect, "imageClipEnabled");
+    gs_eparam_t *clip_rect = fxm_effect_param(layer_effect, "imageClipRect");
+    gs_eparam_t *corner_radii = fxm_effect_param(layer_effect, "imageCornerRadii");
+    gs_eparam_t *logical_size = fxm_effect_param(layer_effect, "imageLogicalSize");
+    gs_eparam_t *source_texel_size = fxm_effect_param(layer_effect, "sourceTexelSize");
+    gs_eparam_t *image_scale_filter = fxm_effect_param(layer_effect, "imageScaleFilter");
     gs_eparam_t *projected_mask = fxm_effect_param(
-        session->copy_effect, "postProjectionMask");
+        layer_effect, "postProjectionMask");
     gs_eparam_t *projected_mask_enabled = fxm_effect_param(
-        session->copy_effect, "postProjectionMaskEnabled");
+        layer_effect, "postProjectionMaskEnabled");
     gs_eparam_t *projected_mask_mode_param = fxm_effect_param(
-        session->copy_effect, "postProjectionMaskMode");
+        layer_effect, "postProjectionMaskMode");
     if (!image || !weight_param || !clip_enabled || !clip_rect ||
         !corner_radii || !logical_size || !source_texel_size ||
         !image_scale_filter || !projected_mask ||
@@ -1675,7 +1690,7 @@ static bool draw_gpu_layer_texture(TitleGpuRenderSession *session,
     const LayerTransitionVisualState transition = evaluate_layer_general_transitions(
         layer.transitions, layer.in_time, layer.out_time,
         gpu_layer_transition_time(title, layer, title_time));
-    set_gpu_transition_effect_params(session, session->copy_effect, transition);
+    set_gpu_transition_effect_params(session, layer_effect, transition);
     const bool gpu_image_clip =
         (layer_type_is_image_like(layer.type) ||
          layer.type == LayerType::TransitionInput) &&
@@ -1713,8 +1728,8 @@ static bool draw_gpu_layer_texture(TitleGpuRenderSession *session,
         ? logical_height / std::max(1.0, static_cast<double>(texture_height))
         : 1.0;
 
-    if (!set_gpu_layer_lighting_params(
-            session, session->copy_effect, texture, title, layer, resolved_time,
+    if (lighting_enabled && !set_gpu_layer_lighting_params(
+            session, layer_effect, texture, title, layer, resolved_time,
             local_time, origin, logical_width, logical_height, sx, sy, 0.0))
         return false;
 
@@ -1862,7 +1877,7 @@ static bool draw_gpu_layer_texture(TitleGpuRenderSession *session,
         }
     }
     auto draw_geometry_pass = [&]() {
-        while (gs_effect_loop(session->copy_effect, hardware_depth ? "DepthDraw" : "Draw")) {
+        while (gs_effect_loop(layer_effect, hardware_depth ? "DepthDraw" : "Draw")) {
             if (transform_grid) {
                 gs_load_vertexbuffer(transform_grid); gs_draw(GS_TRIS, 0, 0); gs_load_vertexbuffer(nullptr);
             } else {
@@ -1939,16 +1954,18 @@ static bool draw_gpu_layer_texture(TitleGpuRenderSession *session,
             gs_matrix_translate3f(static_cast<float>(-texture_width * 0.5), static_cast<float>(-texture_height * 0.5), 0.0f);
             /* Lighting and shadow lookup use the actual shell plane instead of
              * reusing the front-face world position for every depth slice. */
-            set_gpu_layer_lighting_params(
-                session, session->copy_effect, texture, title, layer, title_time,
-                local_time, origin, logical_width, logical_height, sx, sy, z);
+            if (lighting_enabled)
+                set_gpu_layer_lighting_params(
+                    session, layer_effect, texture, title, layer, title_time,
+                    local_time, origin, logical_width, logical_height, sx, sy, z);
             draw_geometry_pass();
             gs_matrix_pop();
         }
     }
-    set_gpu_layer_lighting_params(
-        session, session->copy_effect, texture, title, layer, title_time,
-        local_time, origin, logical_width, logical_height, sx, sy, 0.0);
+    if (lighting_enabled)
+        set_gpu_layer_lighting_params(
+            session, layer_effect, texture, title, layer, title_time,
+            local_time, origin, logical_width, logical_height, sx, sy, 0.0);
     /* A front bevel needs an inset front face. Drawing the original full-size
      * face after the shells covers the entire bevel ring and makes the option
      * appear to do nothing. Keep the outer body silhouette at full size while
