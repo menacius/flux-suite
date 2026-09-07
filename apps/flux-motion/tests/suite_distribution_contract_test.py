@@ -27,9 +27,9 @@ plugin_version = (PLUGIN_ROOT / "VERSION.txt").read_text(encoding="utf-8").strip
 assert "project(flux-motion VERSION 0.8.19)" in cmake
 assert 'flux_read_version("${CMAKE_CURRENT_SOURCE_DIR}/VERSION.txt"' in cmake
 assert 'flux_read_version("${OBS_FXM_OBS_PLUGIN_ROOT}/VERSION.txt"' in cmake
-assert motion_version == "2026 - v0.8.19-alpha"
-assert plugin_version == "2026 - v0.8.19-alpha"
-assert '#define FXM_VERSION_LABEL "2026 - v0.8.19-alpha"' in build_info
+assert motion_version == "2026 - v0.8.19-2-alpha"
+assert plugin_version == "2026 - v0.8.19-2-alpha"
+assert '#define FXM_VERSION_LABEL "2026 - v0.8.19-2-alpha"' in build_info
 assert "show_plugin_preferences(main)" in plugin_main
 assert "open_editor_preferences(&error)" not in plugin_main
 assert "Cache / Prerendering" in preferences

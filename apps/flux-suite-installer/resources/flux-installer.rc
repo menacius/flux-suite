@@ -21,11 +21,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Flux Motion"
             VALUE "FileDescription", "Flux Suite Installer, Downloader and Updater"
-            VALUE "FileVersion", "2026 - v0.8.19-alpha"
+            VALUE "FileVersion", "2026 - v0.8.19-2-alpha"
             VALUE "InternalName", "flux-suite-installer"
             VALUE "OriginalFilename", "Flux Suite.exe"
             VALUE "ProductName", "Flux Suite"
-            VALUE "ProductVersion", "2026 - v0.8.19-alpha"
+            VALUE "ProductVersion", "2026 - v0.8.19-2-alpha"
         END
     END
     BLOCK "VarFileInfo"

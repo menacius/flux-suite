@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "suiteVersion": "2026 - v0.8.19-alpha",
+  "suiteVersion": "2026 - v0.8.19-2-alpha",
   "channel": "Alpha",
   "products": [
     {
@@ -35,26 +35,26 @@
       "name": "Flux Motion",
       "tagline": "Real-time graphics authoring",
       "description": "Design broadcast graphics, titles and motion scenes in one focused workspace.",
-      "version": "2026 - v0.8.19-alpha",
+      "version": "2026 - v0.8.19-2-alpha",
       "accent": "#ff416c",
       "glyph": "FM",
       "icon": ":/flux/icons/flux-motion.svg",
-      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.19-alpha_windows-x64.zip",
+      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.19-2-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "84af1a7b3d04f21f64af53180c44b4fc5d95976dc9c6c3b6cc60ab821c7df1cc",
-      "size": 57973132,
+      "sha256": "0ecd5b631393eae637a3c52098bf72ce2fc099b9866f59e389a736f42f9300e2",
+      "size": 57919590,
       "installFolder": "Flux Motion",
       "executable": "Flux Motion.exe",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.18-alpha",
-        "version": "2026 - v0.8.19-alpha",
+        "fromVersion": "2026 - v0.8.19-alpha",
+        "version": "2026 - v0.8.19-2-alpha",
         "entries": [
-          "Added native Chart layers with seven chart types, Static or external data, per-value colors, shared gradients and optional OBS-dock exposure.",
-          "Improved playback and adaptive-resolution performance while keeping OBS, final output and cache rendering at full quality.",
-          "Added the in-window Welcome popup with Flux Motion branding and application logo, plus the standalone New Title format dialog; enabled first-install precaching and fixed initial text, canvas layout and strict Play after rendering behavior."
+          "Fixed project, title, template and embedded-asset loading from Windows paths containing Greek or other non-ASCII characters.",
+          "Standardized direct C++ filesystem access on explicit UTF-8 path conversion and retained Unicode-safe Qt save operations.",
+          "Validated the fix against the original Greek-path project and the existing serialization and preset I/O regression suites."
         ]
       }
     },
@@ -63,26 +63,26 @@
       "name": "Flux Motion Plugin for OBS",
       "tagline": "Native OBS graphics integration",
       "description": "Cue and render Flux Motion projects directly inside OBS Studio.",
-      "version": "2026 - v0.8.19-alpha",
+      "version": "2026 - v0.8.19-2-alpha",
       "accent": "#14c9b3",
       "glyph": "FX",
       "icon": ":/flux/icons/flux-motion-obs.svg",
-      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.19-alpha_windows-x64.zip",
+      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.19-2-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "9dfc486ca39e2a9d8d14cbb0d0dd0712b3ea6a2ad6a2d6ec5282d9cf15dd6456",
-      "size": 20712381,
+      "sha256": "86600f427dc65e1ce53f320d91c889e754804017400d08a50a8818b3196771f1",
+      "size": 20410240,
       "installFolder": "flux-motion",
       "executable": "bin/64bit/flux-motion.dll",
       "packageRoot": "flux-motion",
       "kind": "obs-plugin",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.18-alpha",
-        "version": "2026 - v0.8.19-alpha",
+        "fromVersion": "2026 - v0.8.19-alpha",
+        "version": "2026 - v0.8.19-2-alpha",
         "entries": [
-          "Added shared native Chart rendering with consistent external-source settings, field mappings, colors, gradients and selected Static Data values exposed in the OBS dock.",
-          "Kept OBS-created titles on the active OBS resolution and frame rate, and made cached chart animation deterministic.",
-          "Fixed first-frame Text rendering with caching and simplified Playback and Cache controls to Clear All Cache and Cache Entire Timeline."
+          "Fixed Flux Motion project loading in OBS when the project or its parent folders contain Greek or other non-ASCII characters.",
+          "Fixed Unicode-path filesystem metadata and dependency-free WAV access in the shared OBS audio runtime.",
+          "Kept the existing project schema and authored content unchanged; no project migration is required."
         ]
       }
     }

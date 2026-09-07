@@ -130,15 +130,10 @@ if (-not $ProjectVersionMatch.Success) {
     exit 1
 }
 $ProjectVersion = $ProjectVersionMatch.Groups[1].Value
-$PrereleaseVersion = Get-CMakeQuotedValue -Text $CMakeListsText -VariableName "OBS_FXM_PRERELEASE"
 $DevelopmentVersion = Get-CMakeQuotedValue -Text $CMakeListsText -VariableName "OBS_FXM_DEVELOPMENT_VERSION"
 if ([string]::IsNullOrWhiteSpace($DevelopmentVersion)) {
     Write-Error "Could not read OBS_FXM_DEVELOPMENT_VERSION from CMakeLists.txt."
     exit 1
-}
-$VersionComponent = "v$ProjectVersion"
-if (-not [string]::IsNullOrWhiteSpace($PrereleaseVersion)) {
-    $VersionComponent += "-$PrereleaseVersion"
 }
 $VersionFilePath = Join-Path $ScriptDir "VERSION.txt"
 if (-not (Test-Path -LiteralPath $VersionFilePath)) {
@@ -146,8 +141,15 @@ if (-not (Test-Path -LiteralPath $VersionFilePath)) {
     exit 1
 }
 $ReleaseLabel = (Get-Content -Raw -LiteralPath $VersionFilePath).Trim()
-if (-not $ReleaseLabel.EndsWith(" - $VersionComponent", [StringComparison]::Ordinal)) {
-    Write-Error "Flux Suite version label '$ReleaseLabel' does not match project version '$VersionComponent'."
+$ReleaseVersionMatch = [regex]::Match(
+    $ReleaseLabel,
+    '(?i)(?:^|\s-\s)v?(\d+\.\d+\.\d+(?:-[0-9a-z.-]+)?)$'
+)
+if (-not $ReleaseVersionMatch.Success -or
+    -not $ReleaseVersionMatch.Groups[1].Value.StartsWith(
+        "$ProjectVersion-", [StringComparison]::OrdinalIgnoreCase) -and
+    $ReleaseVersionMatch.Groups[1].Value -ne $ProjectVersion) {
+    Write-Error "Flux Suite version label '$ReleaseLabel' does not match project version '$ProjectVersion'."
     exit 1
 }
 
@@ -436,6 +438,7 @@ if (Test-Path -LiteralPath $CMakeCachePath) {
 # 4. Configure CMake
 Write-Host "`n=== Configuring CMake ==="
 $CmakeArgs = @(
+    "-S", $ScriptDir,
     "-B", $BuildDir,
     "-G", $Generator,
     "-A", $Architecture,
@@ -465,6 +468,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if ($BuildTests) {
+    Write-Host "`n=== Building Flux Motion validation targets ==="
+    & cmake --build $BuildDir --config $Configuration --target ALL_BUILD -- /m
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Test build failed."
+        exit 1
+    }
     Write-Host "`n=== Running Flux Motion tests ==="
     & ctest --test-dir $BuildDir -C $Configuration --output-on-failure
     if ($LASTEXITCODE -ne 0) {

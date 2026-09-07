@@ -4,6 +4,7 @@
 #include "performance-counters.h"
 #include "title-logger.h"
 #include "title-video-runtime.h"
+#include "utf8-filesystem.h"
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -95,8 +96,10 @@ static float fade_shape(double x, AudioFadeCurve curve)
 static std::string asset_cache_key(const std::string &path, int stream, uint32_t rate)
 {
     std::error_code ec;
-    const auto size = std::filesystem::file_size(path, ec);
-    const auto stamp = std::filesystem::last_write_time(path, ec).time_since_epoch().count();
+    const auto filesystem_path = fxm::filesystem_path_from_utf8(path);
+    const auto size = std::filesystem::file_size(filesystem_path, ec);
+    const auto stamp = std::filesystem::last_write_time(filesystem_path, ec)
+                           .time_since_epoch().count();
     return path + "|" + std::to_string(stream) + "|" + std::to_string(rate) + "|" +
            std::to_string(size) + "|" + std::to_string(stamp);
 }
@@ -974,7 +977,8 @@ SourceAudioRuntime::decode_clip(const ClipSpec &spec, uint32_t target_rate,
 #else
     // Dependency-free PCM WAV fallback. Other formats become available
     // automatically when FFmpeg development libraries are found.
-    std::ifstream file(spec.path, std::ios::binary);
+    std::ifstream file(fxm::filesystem_path_from_utf8(spec.path),
+                       std::ios::binary);
     if (!file || cancelled())
         return out;
     std::array<uint8_t, 12> riff{};

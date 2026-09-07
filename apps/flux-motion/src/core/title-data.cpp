@@ -18,6 +18,7 @@
 #include "text-animator-presets.h"
 #include "host-context-provider.h"
 #include "logger.h"
+#include "utf8-filesystem.h"
 
 #include <QSaveFile>
 #include <QString>
@@ -828,7 +829,7 @@ static ExternalDataSourceDefinition external_source_from_json(const json &j)
 
 static bool file_exists(const std::string &path)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fxm::filesystem_path_from_utf8(path), std::ios::binary);
     return f.is_open();
 }
 
@@ -899,7 +900,7 @@ static std::string mime_type_for_file_name(const std::string &file_name)
 
 static bool read_binary_file(const std::string &path, std::string &out, std::streamoff max_bytes, std::string *error)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fxm::filesystem_path_from_utf8(path), std::ios::binary);
     if (!f.is_open()) {
         if (error) *error = "Could not open asset file: " + path;
         return false;
@@ -1062,7 +1063,7 @@ static bool restore_embedded_image_asset(const json &j, std::string &image_path)
 
 static bool read_json_file(const std::string &path, json &out, std::string *error)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fxm::filesystem_path_from_utf8(path), std::ios::binary);
     if (!f.is_open()) {
         if (error) *error = "Could not open the file.";
         return false;

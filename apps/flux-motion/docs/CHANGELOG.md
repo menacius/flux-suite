@@ -1,3 +1,15 @@
+# 2026 - v0.8.19-2-alpha
+
+## Development Version 420 — Unicode-safe Windows file access
+
+- Fixed `.fxmproj`, `.fxmt`, JSON template and embedded-asset reads from
+  Windows paths containing Greek or other non-ASCII characters.
+- Standardized direct standard-library filesystem access on explicit UTF-8
+  path conversion, including existence checks, binary reads and project reads.
+- Preserved the existing project and title schemas; files require no migration.
+- Added regression coverage and verified the original `ToNima.fxmproj` directly
+  from its Greek parent directories.
+
 # 2026 - v0.8.19-alpha
 
 ## Development Version 419 — native charts and end-to-end playback performance

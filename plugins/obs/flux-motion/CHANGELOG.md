@@ -1,3 +1,11 @@
+# 2026 - v0.8.19-2-alpha
+
+- Fixed project loading when `.fxmproj` files or their parent folders contain
+  Greek or other non-ASCII characters on Windows.
+- Fixed Unicode-path filesystem metadata and dependency-free WAV reads in the
+  OBS audio runtime.
+- Retained the existing project schema and title selection behavior.
+
 # 2026 - v0.8.19-alpha
 
 - Kept new OBS-created titles on the active OBS resolution and frame-rate

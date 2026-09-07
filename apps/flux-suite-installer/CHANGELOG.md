@@ -1,3 +1,11 @@
+# 2026 - v0.8.19-2-alpha
+
+- Published Unicode-safe Windows file access for Flux Motion and the Flux
+  Motion Plugin for OBS.
+- Updated the signed update catalog, application packages and bootstrap setup
+  to the v0.8.19-2-alpha release identity.
+- Retained the unchanged v0.8.18-alpha Flux Encoder package.
+
 # 2026 - v0.8.19-alpha
 
 - Kept each product's latest changelog link visible after installation and
