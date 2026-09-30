@@ -621,7 +621,6 @@ static void publish_card_transform(SceneMaskDock::MaskCard *card)
         card->zoom->setValue(static_cast<int>(std::lround(card->current_zoom)));
     }
 }
-
 static void finish_card_motion(SceneMaskDock::MaskCard *card)
 {
     if (!card)

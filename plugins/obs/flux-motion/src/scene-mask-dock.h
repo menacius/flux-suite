@@ -35,4 +35,3 @@ private:
     QTimer *refresh_timer_ = nullptr;
     std::vector<std::unique_ptr<MaskCard>> cards_;
 };
-
