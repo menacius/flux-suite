@@ -52,6 +52,9 @@ private:
     void populateProducts();
     QWidget *createProductCard(const Product &product);
     QString installPathFor(const Product &product) const;
+    QStringList installCandidatesFor(const Product &product) const;
+    QStringList installedPathsFor(const Product &product) const;
+    QString installedPathFor(const Product &product) const;
     QString installedVersion(const Product &product) const;
     QString installedPackageHash(const Product &product) const;
     ProductState stateFor(const Product &product) const;

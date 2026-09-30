@@ -355,6 +355,24 @@ int main(int argc, char **argv)
         smoke_title.height = 180;
         smoke_title.frame_rate = 24.0;
         smoke_title.duration = 1.0;
+        /* Exercise a real layer-copy pass. An empty title only validates the
+         * render target and would miss shader compilation regressions such as
+         * the multi-minute D3D optimizer stall fixed in Development 420. */
+        auto smoke_layer = std::make_shared<Layer>();
+        smoke_layer->id = "standalone-gpu-smoke-layer";
+        smoke_layer->name = "GPU smoke rectangle";
+        smoke_layer->type = LayerType::SolidRect;
+        smoke_layer->position.static_value = {32.0, 24.0};
+        smoke_layer->rect_width = 128.0f;
+        smoke_layer->rect_height = 72.0f;
+        smoke_layer->size.static_value = {128.0, 72.0};
+        smoke_layer->fill_color = 0xFFFFFFFF;
+        smoke_layer->fill_color_a.static_value = 255.0;
+        smoke_layer->fill_color_r.static_value = 255.0;
+        smoke_layer->fill_color_g.static_value = 255.0;
+        smoke_layer->fill_color_b.static_value = 255.0;
+        smoke_layer->out_time = smoke_title.duration;
+        smoke_title.layers.push_back(smoke_layer);
         TitleGpuRenderSession *session = title_gpu_render_session_create();
         bool rendered = session != nullptr;
         QSize first_size;

@@ -191,6 +191,7 @@
     },
     "rendering_2d_3d": {
       "python": [
+        "tests/development_version_420_shader_startup_legacy_obs_contract_test.py",
         "tests/development_version_399_close_point_text_shadow_projection_contract_test.py",
         "tests/development_version_398_planar_shadow_text_continuity_contract_test.py",
         "tests/development_version_397_text_shadow_source_size_contract_test.py",

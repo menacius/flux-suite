@@ -59,7 +59,15 @@
 
 # 2026 - v0.8.19-alpha
 
-## Development Version 419 — native charts and end-to-end playback performance
+## Development Version 420 — renderer startup and legacy OBS compatibility
+
+- Split the ordinary layer-copy shader from the advanced 3D lighting and
+  shadow shader, preventing multi-minute D3D compilation stalls from blocking
+  the standalone canvas and OBS graphics thread for normal 2D titles.
+- Registered the legacy Broadcast Graphics Live source identifier through Flux
+  Motion so existing OBS scene collections survive removal of the old plugin.
+
+## Development Version 420 — native charts and end-to-end playback performance
 
 ### Welcome and first-run defaults
 
