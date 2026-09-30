@@ -102,7 +102,15 @@ void SelfUpdater::download(const InstallerRelease &release)
             Q_EMIT finished(false, {}, {}, QStringLiteral("Could not prepare the self-update workspace."));
             return;
         }
-        const QString destination = QDir(directory).filePath(QStringLiteral("Flux Suite Setup.exe"));
+        const QString fileName = QFileInfo(QUrl(release.url).path()).fileName();
+        const QString destination = QDir(directory).filePath(
+            fileName.isEmpty()
+#ifdef Q_OS_WIN
+                ? QStringLiteral("Flux Suite Setup.exe")
+#else
+                ? QStringLiteral("flux-suite-update")
+#endif
+                : fileName);
         QString error;
         const qint64 limit = qMax<qint64>(release.size + 1, 1024 * 1024);
         if (!NetworkUtils::downloadFile(QUrl(release.url), destination, limit,
@@ -135,6 +143,14 @@ bool SelfUpdater::applyDownloaded(const QString &downloadedPath, const QString &
                                   QString *error)
 {
     if (!UpdateSecurity::verifyFileSha256(downloadedPath, expectedSha256, error)) return false;
+#ifndef Q_OS_WIN
+    if (!QFile::setPermissions(downloadedPath, QFile::permissions(downloadedPath)
+            | QFileDevice::ExeOwner | QFileDevice::ExeUser | QFileDevice::ExeGroup
+            | QFileDevice::ExeOther)) {
+        if (error) *error = QStringLiteral("Could not mark the verified update as executable.");
+        return false;
+    }
+#endif
     /* The signed bootstrap contains Flux Suite and every Qt dependency. A
      * bare Flux Suite.exe cannot run from the temporary download directory. */
     const QStringList arguments = {
@@ -157,8 +173,12 @@ int SelfUpdater::runApplyMode(const QString &source, const QString &target,
     const QFileInfo targetInfo(target);
     if (!sourceInfo.isFile()
         || sourceInfo.absoluteFilePath() != QFileInfo(QCoreApplication::applicationFilePath()).absoluteFilePath()
+#ifdef Q_OS_WIN
         || targetInfo.fileName().compare(QStringLiteral("Flux Suite.exe"),
-                                                              Qt::CaseInsensitive) != 0
+                                         Qt::CaseInsensitive) != 0
+#else
+        || targetInfo.fileName() != QStringLiteral("flux-suite")
+#endif
         || sourceInfo.absoluteFilePath() == targetInfo.absoluteFilePath()
         || !UpdateSecurity::verifyFileSha256(source, expectedSha256, error)) return 20;
 
@@ -176,10 +196,18 @@ int SelfUpdater::runApplyMode(const QString &source, const QString &target,
 #endif
 
     if (!copyAtomically(source, target, error)) return 22;
+#ifndef Q_OS_WIN
+    if (!QFile::setPermissions(target, QFile::permissions(target)
+            | QFileDevice::ExeOwner | QFileDevice::ExeUser | QFileDevice::ExeGroup
+            | QFileDevice::ExeOther)) {
+        if (error) *error = QStringLiteral("The installer was updated but is not executable.");
+        return 23;
+    }
+#endif
     if (!QProcess::startDetached(target, {QStringLiteral("--self-update-complete")},
                                  targetInfo.absolutePath())) {
         if (error) *error = QStringLiteral("The installer was updated but could not be restarted.");
-        return 23;
+        return 24;
     }
     return 0;
 }

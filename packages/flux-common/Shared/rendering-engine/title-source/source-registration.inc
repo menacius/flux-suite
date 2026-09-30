@@ -1346,17 +1346,20 @@ static SceneMaskBoxLayout scene_mask_box_layout(
     double scene_width, double scene_height)
 {
     SceneMaskBoxLayout layout;
+    TitleSourceData::SceneMaskConfig effective = cfg;
+    constrain_scene_mask_config_to_box(
+        effective, box_width, box_height, scene_width, scene_height);
     const fxm::ImageDisplaySize fitted = fxm::calculate_image_display_size(
-        cfg.box_mode, true, box_width, box_height,
+        effective.box_mode, true, box_width, box_height,
         scene_width, scene_height);
     if (fitted.width <= 0.0 || fitted.height <= 0.0 ||
         scene_width <= 0.0 || scene_height <= 0.0)
         return layout;
 
-    const double display_width = fitted.width * cfg.zoom;
-    const double display_height = fitted.height * cfg.zoom;
-    layout.x = (box_width - display_width) * cfg.anchor_x + cfg.x;
-    layout.y = (box_height - display_height) * cfg.anchor_y + cfg.y;
+    const double display_width = fitted.width * effective.zoom;
+    const double display_height = fitted.height * effective.zoom;
+    layout.x = (box_width - display_width) * effective.anchor_x + effective.x;
+    layout.y = (box_height - display_height) * effective.anchor_y + effective.y;
     layout.scale_x = display_width / scene_width;
     layout.scale_y = display_height / scene_height;
     return layout;
@@ -1500,9 +1503,6 @@ uniform float2 logicalOrigin;
 uniform float2 logicalSize;
 uniform float2 sceneLocalOrigin;
 uniform float2 sceneScale;
-uniform float2 boxOrigin;
-uniform float2 boxSize;
-uniform float cropOutsideBox;
 sampler_state linearSampler { Filter = Linear; AddressU = Clamp; AddressV = Clamp; };
 struct VertDataIn { float4 pos : POSITION; float2 uv : TEXCOORD0; };
 struct VertDataOut { float4 pos : POSITION; float2 uv : TEXCOORD0; };
@@ -1514,11 +1514,6 @@ VertDataOut VSDefault(VertDataIn v) {
 }
 float4 PSRuntimeSceneMask(VertDataOut v) : TARGET {
     float2 localPos = logicalOrigin + v.uv * logicalSize;
-    if (cropOutsideBox > 0.5 &&
-        (localPos.x < boxOrigin.x || localPos.y < boxOrigin.y ||
-         localPos.x > boxOrigin.x + boxSize.x ||
-         localPos.y > boxOrigin.y + boxSize.y))
-        return float4(0.0, 0.0, 0.0, 0.0);
     float2 scenePx = (localPos - sceneLocalOrigin) /
         max(sceneScale, float2(0.0001, 0.0001));
     float2 sceneUv = (scenePx - sceneCaptureOrigin) /
@@ -1631,13 +1626,9 @@ static bool set_runtime_scene_mask_raster(
     gs_eparam_t *scene_origin_param =
         fxm_effect_param(effect, "sceneLocalOrigin");
     gs_eparam_t *scale_param = fxm_effect_param(effect, "sceneScale");
-    gs_eparam_t *box_origin_param = fxm_effect_param(effect, "boxOrigin");
-    gs_eparam_t *box_size_param = fxm_effect_param(effect, "boxSize");
-    gs_eparam_t *crop_param = fxm_effect_param(effect, "cropOutsideBox");
     if (!scene_param || !mask_param || !scene_bounds_param ||
         !scene_capture_origin_param || !scene_capture_size_param ||
-        !origin_param || !size_param || !scene_origin_param || !scale_param ||
-        !box_origin_param || !box_size_param || !crop_param) {
+        !origin_param || !size_param || !scene_origin_param || !scale_param) {
         gs_texrender_end(runtime.target);
         return false;
     }
@@ -1674,13 +1665,6 @@ static bool set_runtime_scene_mask_raster(
     vec2_set(&value, static_cast<float>(layout.scale_x),
              static_cast<float>(layout.scale_y));
     gs_effect_set_vec2(scale_param, &value);
-    vec2_set(&value, static_cast<float>(box_x),
-             static_cast<float>(box_y));
-    gs_effect_set_vec2(box_origin_param, &value);
-    vec2_set(&value, static_cast<float>(box_width),
-             static_cast<float>(box_height));
-    gs_effect_set_vec2(box_size_param, &value);
-    gs_effect_set_float(crop_param, cfg.crop_when_outside_box ? 1.0f : 0.0f);
     gs_matrix_push();
     gs_matrix_identity();
     gs_enable_blending(false);
@@ -1727,7 +1711,7 @@ static bool prepare_runtime_scene_mask_rasters(
         return false;
     }
     if (data->active_scene_mask_scenes.empty() &&
-        data->scene_mask_foreground_active)
+        data->shown_on_display.load(std::memory_order_acquire))
         activate_scene_mask_scenes(data);
     if (data->active_scene_mask_scenes.empty())
         return false;
@@ -1833,7 +1817,7 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
         return;
 
     if (data->active_scene_mask_scenes.empty() &&
-        data->scene_mask_foreground_active)
+        data->shown_on_display.load(std::memory_order_acquire))
         activate_scene_mask_scenes(data);
     if (data->active_scene_mask_scenes.empty())
         return;
@@ -2327,6 +2311,9 @@ static void add_scene_mask_properties_for_title(
         return;
 
     obs_properties_t *group = obs_properties_create();
+    obs_properties_add_bool(
+        group, PROP_SCENE_MASK_CLIP_TO_BOUNDS,
+        "Keep all Scene Masks within mask bounds");
     for (const auto &layer : masks) {
         if (!layer) continue;
         obs_properties_t *layer_group = obs_properties_create();
@@ -2356,10 +2343,6 @@ static void add_scene_mask_properties_for_title(
         obs_property_list_add_int(
             box_mode, fxm_tr_c("OBSTitles.ImageBoxStretchToFill"),
             (long long)ImageBoxMode::StretchToFill);
-        obs_properties_add_bool(
-            layer_group,
-            scene_mask_key(layer->id, "crop_when_outside_box").c_str(),
-            fxm_tr_c("OBSTitles.SceneMaskCropWhenOutside"));
         obs_property_t *box_anchor = obs_properties_add_list(
             layer_group, scene_mask_key(layer->id, "box_anchor").c_str(),
             fxm_tr_c("OBSTitles.SceneMaskPosition"),
@@ -2373,12 +2356,36 @@ static void add_scene_mask_properties_for_title(
         for (int anchor = 0; anchor < 9; ++anchor)
             obs_property_list_add_int(
                 box_anchor, fxm_tr_c(anchor_labels[anchor]), anchor);
-        obs_properties_add_float_slider(layer_group, scene_mask_key(layer->id, "zoom_percent").c_str(),
-            "Scene Zoom Level (%)", 1.0, 800.0, 1.0);
-        obs_properties_add_float_slider(layer_group, scene_mask_key(layer->id, "x").c_str(),
-            "Horizontal Position", -9999.0, 9999.0, 1.0);
-        obs_properties_add_float_slider(layer_group, scene_mask_key(layer->id, "y").c_str(),
-            "Vertical Position", -9999.0, 9999.0, 1.0);
+        auto *source_data = static_cast<TitleSourceData *>(
+            obs_properties_get_param(props));
+        if (g_scene_mask_controls_opener && source_data) {
+            obs_properties_add_button2(
+                layer_group, scene_mask_key(layer->id, "controls").c_str(),
+                "Open Joystick / Dial Controls...",
+                [](obs_properties_t *, obs_property_t *property, void *priv) {
+                    auto *source_data = static_cast<TitleSourceData *>(priv);
+                    if (!source_data || !source_data->source ||
+                        !property || !g_scene_mask_controls_opener)
+                        return false;
+                    const char *property_name = obs_property_name(property);
+                    const auto title = source_title_snapshot(source_data);
+                    for (const auto &mask_layer : scene_mask_layers(title)) {
+                        if (mask_layer && property_name &&
+                            scene_mask_key(mask_layer->id, "controls") == property_name) {
+                            g_scene_mask_controls_opener(
+                                source_data->source, mask_layer->id.c_str());
+                            break;
+                        }
+                    }
+                    return false;
+                }, source_data);
+        }
+        obs_properties_add_float(layer_group, scene_mask_key(layer->id, "zoom_percent").c_str(),
+            "Scene Zoom Level (%)", 1.0, 800.0, 0.1);
+        obs_properties_add_float(layer_group, scene_mask_key(layer->id, "x").c_str(),
+            "Horizontal Position", -9999.0, 9999.0, 0.1);
+        obs_properties_add_float(layer_group, scene_mask_key(layer->id, "y").c_str(),
+            "Vertical Position", -9999.0, 9999.0, 0.1);
         obs_properties_add_bool(layer_group, scene_mask_key(layer->id, "move_with_mask").c_str(),
             "Move Scene With Mask");
         obs_properties_add_group(group, (std::string("scene_mask_group_") + layer->id).c_str(),
@@ -2412,6 +2419,7 @@ static obs_properties_t *source_get_properties(void *priv)
 {
     auto *data = static_cast<TitleSourceData *>(priv);
     obs_properties_t *props = obs_properties_create();
+    obs_properties_set_param(props, data, nullptr);
 
     obs_property_t *project = obs_properties_add_path(
         props, PROP_PROJECT_PATH, fxm_tr_c("OBSTitles.ProjectFile"), OBS_PATH_FILE,
@@ -2451,6 +2459,7 @@ static void source_get_defaults(obs_data_t *settings)
     obs_data_set_default_string(settings, PROP_TITLE_ID, "");
     obs_data_set_default_string(settings, PROP_PROJECT_PATH, "");
     obs_data_set_default_bool(settings, PROP_CUE_FIRST_ROW_WHEN_ACTIVE, false);
+    obs_data_set_default_bool(settings, PROP_SCENE_MASK_CLIP_TO_BOUNDS, false);
 }
 
 static void sync_media_transport_cue_state(TitleSourceData *data, bool cue)

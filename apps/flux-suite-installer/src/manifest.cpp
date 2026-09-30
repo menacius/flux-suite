@@ -148,7 +148,12 @@ Manifest Manifest::fromJson(const QByteArray &json, QString *error)
         product.sha256 = object.value(QStringLiteral("sha256")).toString().toLower();
         product.size = static_cast<qint64>(object.value(QStringLiteral("size")).toDouble());
         product.installFolder = object.value(QStringLiteral("installFolder")).toString();
+#if defined(Q_OS_WIN)
         product.executable = object.value(QStringLiteral("executable")).toString();
+#else
+        product.executable = object.value(QStringLiteral("linuxExecutable"))
+                                 .toString(object.value(QStringLiteral("executable")).toString());
+#endif
         product.packageRoot = object.value(QStringLiteral("packageRoot")).toString();
         product.kind = object.value(QStringLiteral("kind")).toString();
         product.archiveLimit = qBound(0, object.value(QStringLiteral("archiveLimit")).toInt(3), 10);

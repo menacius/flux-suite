@@ -899,16 +899,15 @@ bool TitleEditor::paste_external_clipboard_to_canvas()
                                       : QPointF(title_->width * 0.5, title_->height * 0.5);
 
     if (mime->hasUrls()) {
+        bool imported = false;
         for (const QUrl &url : mime->urls()) {
             if (!url.isLocalFile())
                 continue;
             const QString path = url.toLocalFile();
-            QImageReader reader(path);
-            if (!reader.canRead())
-                continue;
-            create_image_layer_from_external_source(path, canvas_pt);
-            return true;
+            imported = import_external_file_at(path, canvas_pt, false) || imported;
         }
+        if (imported)
+            return true;
     }
 
     if (mime->hasImage()) {

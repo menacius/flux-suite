@@ -677,6 +677,7 @@ void TitleDock::commit_live_text_cell_edit(const std::shared_ptr<Title> &title,
         }
     }
 
+    refresh_active_live_text_row_without_recue(title);
     TitleDataStore::instance().save();
     TitleDataStore::instance().touch_runtime_change();
     /* A row can also be the previous/outgoing side of another row's persistence

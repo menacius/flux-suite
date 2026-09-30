@@ -408,8 +408,9 @@ int main(int argc, char **argv)
     startup_progress.completeStage(QStringLiteral("plugins"));
 
     startup_progress.beginStage(QStringLiteral("fonts"));
-    QFontDatabase font_database;
-    (void)font_database.families();
+    /* Font enumeration is performed by the text controls when first needed.
+     * Forcing a system-wide scan before the first window appears can stall a
+     * fresh installation while Windows builds its font cache. */
     startup_progress.completeStage(QStringLiteral("fonts"));
 
     startup_progress.beginStage(QStringLiteral("effects"));

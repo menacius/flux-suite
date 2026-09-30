@@ -18,11 +18,23 @@ no repository-wide version.
 
 ## Configure
 
-Use a component preset from the repository root:
+Use a component preset from the repository root. On Windows:
 
 ```powershell
 cmake --preset encoder-windows
 cmake --build --preset encoder-windows
+```
+
+On Linux, install CMake 3.24+, Ninja, GCC or Clang, Qt 6.5+ (Core, Widgets,
+SQL, Concurrent, SVG, Network, Multimedia and WebSockets), OBS Studio
+development files, Cairo/Pango, FFmpeg development files, and OpenGL headers.
+Ubuntu package names are documented in `docs/linux.md`. Then build the entire
+suite from one clean tree:
+
+```bash
+cmake --preset suite-linux
+cmake --build --preset suite-linux --parallel
+ctest --preset suite-linux
 ```
 
 See each component's README for its SDK and runtime requirements.

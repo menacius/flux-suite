@@ -1,0 +1,61 @@
+name: Build Flux Suite on Linux
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "plugins/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
+    steps:
+      - name: Install build and runtime dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            build-essential cmake ninja-build pkg-config git ca-certificates \
+            qt6-base-dev qt6-svg-dev qt6-websockets-dev qt6-multimedia-dev libqt6sql6-sqlite \
+            libcairo2-dev libpango1.0-dev libobs-dev \
+            libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
+            libswresample-dev libssl-dev libgl1-mesa-dev ffmpeg unzip xvfb
+      - uses: actions/checkout@v4
+      - name: Configure the complete suite
+        run: cmake --preset suite-linux --fresh
+      - name: Build the complete suite
+        run: cmake --build --preset suite-linux --parallel 4
+      - name: Run tests
+        run: QT_QPA_PLATFORM=offscreen ctest --preset suite-linux
+      - name: Validate installation tree
+        run: cmake --install out/build/suite-linux --prefix "$RUNNER_TEMP/flux-suite"
+      - name: Build and resolve Debian packages
+        run: |
+          bash packaging/linux/build-debs.sh "$RUNNER_TEMP/flux-suite" "$RUNNER_TEMP/debs"
+          apt-get --simulate install "$RUNNER_TEMP"/debs/*.deb
+      - name: Smoke test command-line startup
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          out/build/suite-linux/apps/flux-suite-installer/flux-suite --validate-manifest
+          out/build/suite-linux/apps/flux-encoder/flux-encoder --help
+          out/build/suite-linux/flux-motion-editor/bin/flux-motion --help
+          out/build/suite-linux/flux-motion-editor/bin/flux-motion-renderer --help
+          out/build/suite-linux/apps/flux-suite-installer/flux-suite --screenshot "$RUNNER_TEMP/flux-suite.png"
+          test -s "$RUNNER_TEMP/flux-suite.png"
+          ldd out/build/suite-linux/flux-motion/bin/64bit/flux-motion.so | (! grep "not found")
+          set +e
+          QT_QPA_PLATFORM=xcb timeout 15s xvfb-run -a env LIBGL_ALWAYS_SOFTWARE=1 \
+            out/build/suite-linux/flux-motion-editor/bin/flux-motion
+          status=$?
+          set -e
+          test "$status" -eq 0 -o "$status" -eq 124
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: flux-suite-linux-x86_64
+          path: ${{ runner.temp }}/debs/*.deb

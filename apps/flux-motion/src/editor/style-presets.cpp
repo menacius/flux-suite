@@ -402,6 +402,7 @@ void applyStrokePayloadToLayer(const QJsonObject &stroke, Layer &layer)
 {
     layer.outline_enabled = stroke.value(QStringLiteral("enabled")).toBool(layer.outline_enabled);
     layer.stroke_width = float(stroke.value(QStringLiteral("width")).toDouble(layer.stroke_width));
+    layer.stroke_width_prop.static_value = layer.stroke_width;
     layer.stroke_offset = float(stroke.value(QStringLiteral("offset")).toDouble(layer.stroke_offset));
     layer.stroke_offset_prop.static_value = layer.stroke_offset;
     layer.outline_opacity = float(stroke.value(QStringLiteral("opacity")).toDouble(layer.outline_opacity));

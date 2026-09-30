@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "suiteVersion": "2026 - v0.8.19-2-alpha",
+  "suiteVersion": "2026 - v0.8.20-alpha",
   "channel": "Alpha",
   "products": [
     {
@@ -18,6 +18,7 @@
       "size": 161930391,
       "installFolder": "Flux Encoder",
       "executable": "Flux Encoder.exe",
+      "linuxExecutable": "flux-encoder",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
@@ -35,26 +36,27 @@
       "name": "Flux Motion",
       "tagline": "Real-time graphics authoring",
       "description": "Design broadcast graphics, titles and motion scenes in one focused workspace.",
-      "version": "2026 - v0.8.19-2-alpha",
+      "version": "2026 - v0.8.20-alpha",
       "accent": "#ff416c",
       "glyph": "FM",
       "icon": ":/flux/icons/flux-motion.svg",
-      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.19-2-alpha_windows-x64.zip",
+      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.20-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "0ecd5b631393eae637a3c52098bf72ce2fc099b9866f59e389a736f42f9300e2",
-      "size": 57919590,
+      "sha256": "63fd6c10695d3f7528e377e8f27fa646c13da6d66a39141b38f3f83b8561daee",
+      "size": 58661177,
       "installFolder": "Flux Motion",
       "executable": "Flux Motion.exe",
+      "linuxExecutable": "flux-motion",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.19-alpha",
-        "version": "2026 - v0.8.19-2-alpha",
+        "fromVersion": "2026 - v0.8.19-3",
+        "version": "2026 - v0.8.20-alpha",
         "entries": [
-          "Fixed project, title, template and embedded-asset loading from Windows paths containing Greek or other non-ASCII characters.",
-          "Standardized direct C++ filesystem access on explicit UTF-8 path conversion and retained Unicode-safe Qt save operations.",
-          "Validated the fix against the original Greek-path project and the existing serialization and preset I/O regression suites."
+          "Added Scene Mask source controls with joystick positioning, W-T zoom and optional numeric entry.",
+          "Added cover-style bounds enforcement so transformed scenes fully cover their masks without empty space.",
+          "Removed the redundant per-mask Crop when out of mask box setting."
         ]
       }
     },
@@ -63,26 +65,29 @@
       "name": "Flux Motion Plugin for OBS",
       "tagline": "Native OBS graphics integration",
       "description": "Cue and render Flux Motion projects directly inside OBS Studio.",
-      "version": "2026 - v0.8.19-2-alpha",
+      "version": "2026 - v0.8.20-alpha",
       "accent": "#14c9b3",
       "glyph": "FX",
       "icon": ":/flux/icons/flux-motion-obs.svg",
-      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.19-2-alpha_windows-x64.zip",
+      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.20-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "86600f427dc65e1ce53f320d91c889e754804017400d08a50a8818b3196771f1",
-      "size": 20410240,
+      "sha256": "131ac29de1517e3a45ae5dd00832bc46efe9fdbd7f962bd923b184fad22af13d",
+      "size": 20451632,
       "installFolder": "flux-motion",
       "executable": "bin/64bit/flux-motion.dll",
+      "linuxExecutable": "bin/64bit/flux-motion.so",
       "packageRoot": "flux-motion",
       "kind": "obs-plugin",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.19-alpha",
-        "version": "2026 - v0.8.19-2-alpha",
+        "fromVersion": "2026 - v0.8.19-3",
+        "version": "2026 - v0.8.20-alpha",
         "entries": [
-          "Fixed Flux Motion project loading in OBS when the project or its parent folders contain Greek or other non-ASCII characters.",
-          "Fixed Unicode-path filesystem metadata and dependency-free WAV access in the shared OBS audio runtime.",
-          "Kept the existing project schema and authored content unchanged; no project migration is required."
+          "Added a compact Scene Masks dock with separate Preview and Monitor sections, joystick positioning and W-T zoom.",
+          "Added adjustable Smooth Motion for live transforms, Center and Reset.",
+          "Kept Preview-only nested videos stopped until Program activation and preserved configured OBS playback behavior.",
+          "Made dock shortcuts durable across plugin updates and kept active cues intact during source changes.",
+          "Applied optional cover-style bounds enforcement consistently from both the dock and source properties."
         ]
       }
     }

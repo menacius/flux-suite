@@ -32,10 +32,12 @@ set(OBS_FXM_OBS_PLUGIN_HOST_HEADERS
     "${OBS_FXM_OBS_PLUGIN_DIR}/obs-translation-provider.h")
 set(OBS_FXM_OBS_PLUGIN_INTEGRATION_SOURCES
     "${OBS_FXM_OBS_PLUGIN_DIR}/plugin-main.cpp"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/scene-mask-dock.cpp"
     "${OBS_FXM_OBS_PLUGIN_DIR}/stinger-transition.cpp"
     "${OBS_FXM_OBS_PLUGIN_DIR}/title-hotkeys.cpp")
 set(OBS_FXM_OBS_PLUGIN_INTEGRATION_HEADERS
     "${OBS_FXM_OBS_PLUGIN_DIR}/plugin-main.h"
+    "${OBS_FXM_OBS_PLUGIN_DIR}/scene-mask-dock.h"
     "${OBS_FXM_OBS_PLUGIN_DIR}/stinger-transition.h"
     "${OBS_FXM_OBS_PLUGIN_DIR}/title-hotkeys.h")
 set(OBS_FXM_OBS_PLUGIN_SOURCE_MODULES

@@ -40,6 +40,56 @@
 #include "open-color-palette.h"
 
 namespace {
+class LazyFontComboBox final : public QComboBox {
+public:
+    using QComboBox::QComboBox;
+
+    bool fontsLoaded() const { return fonts_loaded_; }
+    bool containsLoadedFamily(const QString &family) const
+    {
+        return findText(family, Qt::MatchFixedString) >= 0;
+    }
+
+protected:
+    void showPopup() override
+    {
+        if (!fonts_loaded_) {
+            const QString selected = currentText();
+            QSignalBlocker blocker(this);
+            const QStringList families = QFontDatabase().families();
+            for (const QString &family : families) {
+                if (findText(family, Qt::MatchFixedString) < 0)
+                    addItem(family, family);
+            }
+            setEditText(selected);
+            fonts_loaded_ = true;
+        }
+        QComboBox::showPopup();
+    }
+
+private:
+    bool fonts_loaded_ = false;
+};
+
+class LazyFontStyleComboBox final : public QComboBox {
+public:
+    explicit LazyFontStyleComboBox(QWidget *parent = nullptr) : QComboBox(parent)
+    {
+        setProperty("fxmLazyFontStyles", true);
+    }
+
+protected:
+    void showPopup() override
+    {
+        setProperty("fxmPopulateFontStylesNow", true);
+        populate_font_style_combo(
+            this, property("fxmFontStyleFamily").toString(),
+            property("fxmFontStylePreferred").toString());
+        setProperty("fxmPopulateFontStylesNow", false);
+        QComboBox::showPopup();
+    }
+};
+
 constexpr double kAudioMinimumDb = -96.0;
 constexpr double kAudioMaximumDb = 12.0;
 

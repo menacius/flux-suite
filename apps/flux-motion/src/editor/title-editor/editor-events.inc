@@ -394,6 +394,7 @@ static void copy_editor_layer_style_fields(Layer &dst, const Layer &src)
     dst.stroke_fill_type = src.stroke_fill_type;
     dst.stroke_color = src.stroke_color;
     dst.stroke_width = src.stroke_width;
+    dst.stroke_width_prop = src.stroke_width_prop;
     dst.stroke_offset = src.stroke_offset;
     dst.stroke_offset_prop = src.stroke_offset_prop;
     dst.outline_opacity = src.outline_opacity;
@@ -1096,8 +1097,16 @@ void TitleEditor::refresh_playback_ui(double t, bool force_full_refresh)
             (!timeline_dock_ || timeline_dock_->isVisible()))
             timeline_->set_playhead(t);
         if (time_lbl_) {
-            const QString text = fxm_tr("OBSTitles.TimeFpsFormat")
-                .arg(format_timecode(t)).arg(obs_frame_rate(), 0, 'f', 2);
+            const double target_fps = obs_frame_rate();
+            const double live_fps = canvas_ ? canvas_->live_playback_fps() : 0.0;
+            const QString text = playing_
+                ? fxm_tr("OBSTitles.TimeFpsLiveFormat")
+                      .arg(format_timecode(t))
+                      .arg(live_fps, 0, 'f', 1)
+                      .arg(target_fps, 0, 'f', 2)
+                : fxm_tr("OBSTitles.TimeFpsFormat")
+                      .arg(format_timecode(t))
+                      .arg(target_fps, 0, 'f', 2);
             if (time_lbl_->text() != text)
                 time_lbl_->setText(text);
         }

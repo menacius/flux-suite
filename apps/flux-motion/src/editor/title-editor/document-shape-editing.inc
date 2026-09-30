@@ -221,6 +221,10 @@
             this, &TitleEditor::create_image_layer_from_canvas);
     connect(canvas_, &CanvasPreview::external_image_layer_requested,
             this, &TitleEditor::create_image_layer_from_external_source);
+    connect(canvas_, &CanvasPreview::external_file_import_requested,
+            this, [this](const QString &path, const QPointF &canvas_pt) {
+                import_external_file_at(path, canvas_pt, true);
+            });
     connect(canvas_, &CanvasPreview::external_text_layer_requested,
             this, &TitleEditor::create_text_layer_from_external_source);
     connect(canvas_, &CanvasPreview::asset_layer_requested,

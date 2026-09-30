@@ -74,7 +74,7 @@ for token in (
     "clipPos : TEXCOORD1",
     "projected_mask_alpha",
     "PSDepthLayer",
-    "clip(color.a - 0.0039215686)",
+    "if (color.a < 0.0039215686)",
 ):
     assert token in shader
 for token in (

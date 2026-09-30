@@ -251,16 +251,32 @@ InstallerWindow::InstallerWindow(const QString &manifestSource, QWidget *parent)
     : QMainWindow(parent), m_manifestSource(manifestSource), m_engine(this), m_selfUpdater(this)
 {
     setWindowTitle(QStringLiteral("Flux Suite"));
+#if defined(Q_OS_WIN)
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
+#else
+    // Native decorations provide reliable compositor-managed moving and
+    // resizing on both X11 and Wayland. Frameless hit testing is implemented
+    // through WM_NCHITTEST on Windows only and cannot be reused on Linux.
+    setWindowFlags(Qt::Window | Qt::WindowTitleHint |
+                   Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+#endif
     resize(1120, 730);
     setMinimumSize(920, 640);
 
     QSettings settings;
+#if defined(Q_OS_WIN)
     const QString defaultRoot = QDir(appDataEnvironment("LOCALAPPDATA", QStandardPaths::AppLocalDataLocation))
                                     .filePath(QStringLiteral("Flux Suite"));
+#else
+    const QString defaultRoot = QDir(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+                                    .filePath(QStringLiteral("flux-suite"));
+#endif
     m_applicationInstallRoot = settings.value(QStringLiteral("installation/root"), defaultRoot).toString();
     m_systemWideInstall = settings.value(QStringLiteral("installation/systemWide"), false).toBool();
+#if !defined(Q_OS_WIN)
+    m_systemWideInstall = false;
+#endif
     const QSize savedSize = settings.value(QStringLiteral("window/size")).toSize();
     if (savedSize.isValid())
         resize(savedSize.expandedTo(minimumSize()));
@@ -374,6 +390,11 @@ void InstallerWindow::buildUi()
     closeButton->setObjectName(QStringLiteral("closeButton"));
     connect(closeButton, &QPushButton::clicked, this, &QWidget::close);
     titleLayout->addWidget(closeButton);
+#if !defined(Q_OS_WIN)
+    // The Linux window manager supplies these controls in its native frame.
+    minimizeButton->hide();
+    closeButton->hide();
+#endif
     root->addWidget(titleBar);
 
     auto *scroll = new QScrollArea(surface);
@@ -771,14 +792,23 @@ QWidget *InstallerWindow::createProductCard(const Product &product)
 QString InstallerWindow::installPathFor(const Product &product) const
 {
     if (product.kind == QStringLiteral("obs-plugin")) {
+#if defined(Q_OS_WIN)
         // This is the current OBS-recommended Windows plugin location. Unlike
         // the old roaming-profile location, OBS scans this directory directly.
         const QString common = appDataEnvironment("ProgramData", QStandardPaths::GenericDataLocation);
         return QDir(common).filePath(QStringLiteral("obs-studio/plugins/") + product.installFolder);
+#else
+        const QString config = QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation);
+        return QDir(config).filePath(QStringLiteral("obs-studio/plugins/") + product.installFolder);
+#endif
     }
     if (m_systemWideInstall) {
+#if defined(Q_OS_WIN)
         const QString programFiles = qEnvironmentVariable("ProgramFiles");
         return QDir(programFiles).filePath(QStringLiteral("Flux Suite/") + product.installFolder);
+#else
+        return QDir(QStringLiteral("/opt/flux-suite")).filePath(product.installFolder);
+#endif
     }
     return QDir(m_applicationInstallRoot).filePath(product.installFolder);
 }
@@ -923,7 +953,11 @@ void InstallerWindow::startProductRelease(const Product &product)
         refreshCard(product);
     }
     m_installAll->setEnabled(false);
-    if (m_systemWideInstall || product.kind == QStringLiteral("obs-plugin")) {
+    if (m_systemWideInstall
+#if defined(Q_OS_WIN)
+        || product.kind == QStringLiteral("obs-plugin")
+#endif
+    ) {
         startElevatedProductInstall(product);
         return;
     }
@@ -1213,10 +1247,21 @@ void InstallerWindow::chooseInstallLocation()
     allUsers->setObjectName(QStringLiteral("scopeOption"));
     currentUser->setChecked(!m_systemWideInstall);
     allUsers->setChecked(m_systemWideInstall);
+#if !defined(Q_OS_WIN)
+    // Privileged installation is intentionally not attempted through a shell.
+    // Linux packages and this dashboard use per-user prefixes; distro package
+    // maintainers can use CMake's install prefix for system-wide deployment.
+    allUsers->setEnabled(false);
+    allUsers->setToolTip(QStringLiteral("Use cmake --install with an administrator-selected prefix for a system-wide installation."));
+#endif
     layout->addWidget(currentUser);
     layout->addWidget(allUsers);
     auto *note = new QLabel(
+#if defined(Q_OS_WIN)
         QStringLiteral("The OBS plugin uses OBS Studio's recommended C:\\ProgramData\\obs-studio\\plugins location and always requires administrator approval."),
+#else
+        QStringLiteral("The OBS plugin is installed for the current user under ~/.config/obs-studio/plugins."),
+#endif
         &dialog);
     note->setObjectName(QStringLiteral("scopeNote"));
     note->setWordWrap(true);
@@ -1278,7 +1323,11 @@ void InstallerWindow::chooseInstallLocation()
     settings.setValue(QStringLiteral("installation/systemWide"), m_systemWideInstall);
     populateProducts();
     setGlobalMessage(m_systemWideInstall
+#if defined(Q_OS_WIN)
         ? QStringLiteral("New apps will install system-wide under Program Files.")
+#else
+        ? QStringLiteral("New apps will install system-wide under /opt/flux-suite.")
+#endif
         : QStringLiteral("New apps will install to %1").arg(QDir::toNativeSeparators(m_applicationInstallRoot)));
 }
 

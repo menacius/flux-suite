@@ -1,6 +1,6 @@
 # Flux Motion documentation
 
-These are the canonical documents for `v0.8.19-2-alpha` Development Version 420. Current behavior belongs in the thematic guides; release history belongs in the consolidated changelog.
+These are the canonical documents for `v0.8.20-alpha` Development Version 422. Current behavior belongs in the thematic guides; release history belongs in the consolidated changelog.
 
 | Document | Purpose |
 | --- | --- |

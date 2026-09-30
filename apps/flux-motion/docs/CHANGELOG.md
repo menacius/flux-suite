@@ -1,3 +1,50 @@
+# 2026 - v0.8.20-alpha
+
+## Development Version 422 — Scene Mask live controls and durable shortcuts
+
+- Added a dedicated OBS Scene Masks dock that follows every Flux Motion source
+  visible in Preview or active in Program and exposes per-mask joystick
+  position plus W–T zoom controls.
+- Separated Preview showing from Program activation for nested mask scenes, so
+  video sources do not begin playback merely because they are previewed and
+  retain their authored OBS playback/restart behavior on Program.
+- Persisted dock hotkey bindings immediately when OBS changes them and mirrored
+  them to the plugin configuration directory so binary updates cannot discard
+  operator shortcuts.
+- Preserved live cue state while Scene Mask dock transform values update the
+  underlying OBS source settings.
+- Added compact, clearly separated Preview and Monitor sections plus an
+  adjustable Smooth Motion control that also applies to Center and Reset.
+- Added matching joystick/dial controls and optional numeric entry to Scene
+  Mask source properties.
+- Added cover-style mask-bound enforcement for both source properties and dock
+  controls, preventing scene edges from exposing empty space inside a mask.
+- Removed the redundant per-mask Crop when out of mask box setting.
+
+# 2026 - v0.8.19-3
+
+## Development Version 421 — startup, scene switching and live graphics regressions
+
+- Restored Broadcast Graphics Live-compatible temporal Motion Blur density and
+  removed the editor-only quality clamp that shortened live preview trails.
+- Added live measured FPS beside the target FPS while editor playback is active.
+- Restored one-path File Import, Explorer drag-and-drop and clipboard paste for
+  Qt-supported raster images, SVG, layered PSD/XCF, popular video and audio.
+- Stopped reading entire compressed audio/media files into RAM while creating a
+  layer and staged only release image-format plugins in packaged editors.
+- Moved disk-cache indexing and OBS title-store restoration out of synchronous
+  startup, and made font discovery lazy.
+- Restored cross-timeline marquee keyframe selection.
+- Restored efficient temporal Motion Blur for scaling layers and added bounded
+  temporal processing for Adjustment Layers.
+- Made Scale Stroke authoritative and included stroke width in Stroke
+  keyframes, serialization, cache identity and playback.
+- Preserved resident GPU frames across ordinary OBS scene changes.
+- Preserved the active Program cue while editing, importing, clearing,
+  deleting or reordering Live Text Cue rows.
+- Captured the current workstation dock arrangement as the default workspace
+  for new installations.
+
 # 2026 - v0.8.19-2-alpha
 
 ## Development Version 420 — Unicode-safe Windows file access

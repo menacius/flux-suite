@@ -47,7 +47,7 @@ OUTPUTS AFTER A SUCCESSFUL BUILD
      <name>_<version>_<dev-version>_<platform>.zip
 
    Current example:
-     Flux_Motion_2026_-_v0.8.19-2-alpha_windows-x64.zip
+     Flux_Motion_2026_-_v0.8.20-alpha_windows-x64.zip
 
    The ZIP contains the same plugin folder, data files and runtime DLLs that are
    copied into OBS.

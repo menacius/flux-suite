@@ -11,7 +11,8 @@ static void source_hide(void *priv)
     FXM_LOG_TRACE("Source", QStringLiteral("Source hidden title=%1")
         .arg(QString::fromStdString(data->title_id)));
     release_active_scene_mask_scenes(data);
-    request_source_presentation_reset(data, "source-hidden");
+    /* Ordinary OBS scene routing is reversible and does not change the title
+     * binding. Retain the resident GPU presentation for instant re-entry. */
 }
 
 static uint32_t source_get_width(void *priv)
@@ -147,6 +148,29 @@ static void source_video_tick(void *priv, float seconds)
         apply_source_presentation_reset(data, "title-restored");
         data->visual_identity_hash.clear();
         ++data->visual_model_revision;
+    }
+
+    /* Finish source initialization only after the incoming collection's title
+     * store is available. Preserve a cue that may already have been issued in
+     * the loading gap; otherwise establish the authored uncued/end state. */
+    if (data->initial_title_state_pending) {
+        const bool cue_already_requested = title->current_cue_row >= 0 ||
+            title->pending_cue_row >= 0 || title->cue_uncue_requested;
+        if (cue_already_requested) {
+            data->force_cue_state_sync = true;
+        } else {
+            apply_source_cue_end_state(
+                data, title, "deferred-source-cue-end-state");
+        }
+        data->initial_title_state_pending = false;
+    }
+
+    /* Activation can race the same store load. Retrying here fixes automatic
+     * first-row cueing for sources restored directly into Program. */
+    if (data->activation_cue_pending) {
+        if (data->scene_mask_foreground_active)
+            cue_first_live_text_row_on_activation(data, title);
+        data->activation_cue_pending = false;
     }
 
     /* The editor owns its transport clock. Its private monitored source must
@@ -1333,7 +1357,7 @@ void accumulate_light(float4 positionType, float4 directionIntensity,
 {
     if (colorEnabled.a < 0.5 || directionIntensity.a <= 0.000001)
         return;
-    int lightType = (int)(positionType.w + 0.5);
+    int lightType = int(positionType.w + 0.5);
     float3 lightColor = max(colorEnabled.rgb, float3(0.0, 0.0, 0.0));
     float intensity = max(directionIntensity.a, 0.0);
     if (lightType == 0) {
@@ -1444,7 +1468,7 @@ float2 shadow_sample_rotation(float3 worldPosition, int shadowIndex)
      * crawling artifacts as geometry moved through the scene. The Poisson
      * distribution is already non-grid-shaped, so spatial randomization is
      * unnecessary. */
-    float phase = frac(((float)shadowIndex + 1.0) * 0.61803398875) *
+    float phase = frac((float(shadowIndex) + 1.0) * 0.61803398875) *
         6.28318530718 + worldPosition.x * 0.0;
     return float2(cos(phase), sin(phase));
 }
@@ -1647,8 +1671,8 @@ float2 point_shadow_atlas_uv(float3 direction, float2 atlasTexelSize)
 {
     int faceIndex = point_shadow_face_index(direction);
     float2 tile = faceIndex <= 2
-        ? float2((float)faceIndex, 0.0)
-        : float2((float)(faceIndex - 3), 1.0);
+        ? float2(float(faceIndex), 0.0)
+        : float2(float(faceIndex - 3), 1.0);
     float2 faceTexelSize = atlasTexelSize * float2(3.0, 2.0);
     float2 localUv = point_shadow_face_local_uv(
         faceIndex, direction, faceTexelSize);
@@ -1676,8 +1700,8 @@ float2 point_shadow_point_sample_depths(
 {
     int faceIndex = point_shadow_face_index(sampleDirection);
     float2 tile = faceIndex <= 2
-        ? float2((float)faceIndex, 0.0)
-        : float2((float)(faceIndex - 3), 1.0);
+        ? float2(float(faceIndex), 0.0)
+        : float2(float(faceIndex - 3), 1.0);
     float2 faceTexelSize = atlasTexelSize * float2(3.0, 2.0);
     float2 localUv = point_shadow_face_local_uv(
         faceIndex, sampleDirection, faceTexelSize);
@@ -1951,7 +1975,8 @@ float4 PSLayer(VertDataOut v) : TARGET
 float4 PSDepthLayer(VertDataOut v) : TARGET
 {
     float4 color = layer_color(v);
-    clip(color.a - 0.0039215686);
+    if (color.a < 0.0039215686)
+        discard;
     return color;
 }
 technique Draw { pass { vertex_shader = VSDefault(v); pixel_shader = PSLayer(v); } }
@@ -2059,9 +2084,9 @@ float4 PSShadow(VertDataOut v) : TARGET
             float2(fwidth(v.uv.x), fwidth(v.uv.y)), sourceTexelSize);
         float2 radius = footprint * 0.5 + sourceTexelSize * 0.5;
         for (int sampleY = 0; sampleY < 4; ++sampleY) {
-            float offsetY = ((float)sampleY / 3.0 * 2.0 - 1.0) * radius.y;
+            float offsetY = (float(sampleY) / 3.0 * 2.0 - 1.0) * radius.y;
             for (int sampleX = 0; sampleX < 4; ++sampleX) {
-                float offsetX = ((float)sampleX / 3.0 * 2.0 - 1.0) * radius.x;
+                float offsetX = (float(sampleX) / 3.0 * 2.0 - 1.0) * radius.x;
                 alpha = max(alpha, image.Sample(textureSampler,
                     v.uv + float2(offsetX, offsetY)).a);
             }
@@ -2070,7 +2095,8 @@ float4 PSShadow(VertDataOut v) : TARGET
     alpha *= opacity;
     float effectiveCutoff = conservativeAlpha != 0
         ? min(alphaCutoff, 0.0005) : alphaCutoff;
-    clip(alpha - effectiveCutoff);
+    if (alpha < effectiveCutoff)
+        discard;
     float depth = pointShadow != 0
         ? length(v.worldPosition - pointLightPosition) /
             max(pointShadowFar, 0.0001)
@@ -2175,7 +2201,7 @@ float sdEllipse(float2 p, float2 ab) {
     return (length(p / a) - 1.0) * min(a.x, a.y);
 }
 float sdPolygonUnit(float2 p, int n) {
-    float halfSector = 3.14159265359 / max((float)n, 3.0);
+    float halfSector = 3.14159265359 / max(float(n), 3.0);
     float fullSector = halfSector * 2.0;
     float angleFromTop = atan2(p.y, p.x) + 1.57079632679;
     angleFromTop -= floor(angleFromTop / fullSector) * fullSector;
@@ -2183,7 +2209,7 @@ float sdPolygonUnit(float2 p, int n) {
     return length(p) * cos(sideNormalDelta) - cos(halfSector);
 }
 float sdStarUnit(float2 p, float innerRadius, float outerRadius, int points) {
-    float count = max((float)points, 2.0);
+    float count = max(float(points), 2.0);
     float sector = 3.14159265359 / count;
     float a = atan2(p.y, p.x) + 1.57079632679;
     float k = floor(0.5 + a / sector);

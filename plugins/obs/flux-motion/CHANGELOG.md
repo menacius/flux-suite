@@ -1,3 +1,31 @@
+# 2026 - v0.8.20-alpha
+
+- Added the Scene Masks dock with automatic Preview/Program population,
+  joystick positioning and W–T zoom controls.
+- Prevented Preview-only mask scenes from activating nested video playback;
+  Program activation now follows the media source's configured behavior.
+- Made dock hotkey persistence update-safe through OBS change notifications and
+  an atomic plugin-config backup.
+- Kept active cues intact while mask position and zoom are adjusted live.
+- Added compact Preview/Monitor sections and adjustable Smooth Motion for
+  joystick, zoom, Center and Reset operations.
+- Added joystick/dial controls with optional numeric entry in source
+  properties and synchronized their clamped values with the dock.
+- Added optional cover-style bounds enforcement so every transformed scene
+  fully covers its mask without empty space.
+- Removed the redundant per-mask Crop when out of mask box setting.
+
+# 2026 - v0.8.19-3
+
+- Restored Broadcast Graphics Live-compatible temporal Motion Blur sampling
+  density while keeping its sample budget bounded.
+- Removed synchronous title-store loading and disk-cache indexing from OBS
+  module startup.
+- Preserved resident GPU frames across ordinary scene changes.
+- Added bounded temporal Motion Blur for Adjustment Layers and optimized
+  scaling-layer sampling.
+- Kept active Live Text cues on air while their list data is edited.
+
 # 2026 - v0.8.19-2-alpha
 
 - Fixed project loading when `.fxmproj` files or their parent folders contain

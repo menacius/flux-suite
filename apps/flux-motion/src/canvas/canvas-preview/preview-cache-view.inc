@@ -95,7 +95,8 @@ void apply_shape_resize_metrics_from_state(Layer &layer, double old_w, double ol
                                            float start_shape_roundness,
                                            float start_shape_inner_roundness,
                                            const std::vector<double> &start_path_corner_radii,
-                                           double new_w, double new_h)
+                                           double new_w, double new_h,
+                                           double local_time)
 {
     if (!layer_is_shape_sized(layer))
         return;
@@ -107,6 +108,8 @@ void apply_shape_resize_metrics_from_state(Layer &layer, double old_w, double ol
         layer.stroke_fill_type != 0 &&
         start_stroke_width > 0.0f) {
         layer.stroke_width = (float)std::clamp((double)start_stroke_width * factor, 0.0, 512.0);
+        set_animated_value(layer.stroke_width_prop, local_time,
+                           layer.stroke_width);
     }
     if (layer.scale_corners_with_shape) {
         set_layer_corner_radii(layer,
@@ -179,6 +182,7 @@ struct CanvasPreview::GpuDisplayState {
     uint32_t swapchain_h = 0;
     QRect artwork_rect_px;
     bool shader_compile_screen_active = false;
+    bool native_presentation_supported = true;
     bool enabled = true;
     bool update_color_space = false;
     bool destroying = false;
@@ -202,7 +206,6 @@ static bool canvas_qt_to_gs_window(QWindow *window, gs_window &gswindow)
         gswindow.id = window->winId();
         gswindow.display = obs_get_nix_platform_display();
         return gswindow.display != nullptr;
-#ifdef ENABLE_WAYLAND
     case OBS_NIX_PLATFORM_WAYLAND:
 #if QT_VERSION < QT_VERSION_CHECK(6, 9, 0)
 #ifdef OBS_FXM_HAS_QPA_NATIVE_INTERFACE
@@ -215,13 +218,29 @@ static bool canvas_qt_to_gs_window(QWindow *window, gs_window &gswindow)
         gswindow.display = reinterpret_cast<void *>(window->winId());
 #endif
         return gswindow.display != nullptr;
-#endif
     default:
         return false;
     }
 #endif
 }
 #endif
+
+static bool canvas_native_presentation_supported()
+{
+#if defined(FXM_CANVAS_WITH_OBS) && FXM_CANVAS_WITH_OBS
+#if defined(_WIN32) || defined(__APPLE__)
+    return true;
+#else
+    if (!obs_get_nix_platform_display())
+        return false;
+    const auto platform = obs_get_nix_platform();
+    return platform == OBS_NIX_PLATFORM_X11_EGL ||
+           platform == OBS_NIX_PLATFORM_WAYLAND;
+#endif
+#else
+    return false;
+#endif
+}
 
 static QImage gpu_upload_image(const QImage &source)
 {
@@ -239,16 +258,23 @@ CanvasPreview::CanvasPreview(QWidget *parent) : QWidget(parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAutoFillBackground(false);
 #if defined(FXM_CANVAS_WITH_OBS) && FXM_CANVAS_WITH_OBS
-    setAttribute(Qt::WA_PaintOnScreen, true);
-    setAttribute(Qt::WA_StaticContents, true);
-    setAttribute(Qt::WA_DontCreateNativeAncestors, true);
-    setAttribute(Qt::WA_NativeWindow, true);
-    setAttribute(Qt::WA_OpaquePaintEvent, true);
-    setAttribute(Qt::WA_NoSystemBackground, true);
+    const bool native_presentation = canvas_native_presentation_supported();
+    if (native_presentation) {
+        setAttribute(Qt::WA_PaintOnScreen, true);
+        setAttribute(Qt::WA_StaticContents, true);
+        setAttribute(Qt::WA_DontCreateNativeAncestors, true);
+        setAttribute(Qt::WA_NativeWindow, true);
+        setAttribute(Qt::WA_OpaquePaintEvent, true);
+        setAttribute(Qt::WA_NoSystemBackground, true);
+    } else {
+        setAttribute(Qt::WA_OpaquePaintEvent, true);
+    }
 #else
     setAttribute(Qt::WA_OpaquePaintEvent, true);
 #endif
     gpu_display_ = std::make_unique<GpuDisplayState>();
+    gpu_display_->native_presentation_supported =
+        canvas_native_presentation_supported();
     gpu_render_session_ = title_gpu_render_session_create();
     title_gpu_render_session_set_editor_video_decode_client(
         gpu_render_session_, true);
@@ -487,7 +513,9 @@ QPaintEngine *CanvasPreview::paintEngine() const
      * "QWidget::paintEngine: Should no longer be called" and can repeatedly
      * re-enter backing-store updates during the editor's first expose. OBS
      * owns every canvas presentation, including the pre-swapchain interval. */
-    return nullptr;
+    if (gpu_display_ && gpu_display_->native_presentation_supported)
+        return nullptr;
+    return QWidget::paintEngine();
 #else
     return QWidget::paintEngine();
 #endif
@@ -496,7 +524,8 @@ QPaintEngine *CanvasPreview::paintEngine() const
 bool CanvasPreview::ensure_gpu_display()
 {
 #if defined(FXM_CANVAS_WITH_OBS) && FXM_CANVAS_WITH_OBS
-    if (shutting_down_)
+    if (shutting_down_ || !gpu_display_ ||
+        !gpu_display_->native_presentation_supported)
         return false;
     if (!gpu_display_)
         gpu_display_ = std::make_unique<GpuDisplayState>();
@@ -652,6 +681,15 @@ bool CanvasPreview::present_gpu_display_if_due()
 #if defined(FXM_CANVAS_WITH_OBS) && FXM_CANVAS_WITH_OBS
     if (shutting_down_ || !gpu_display_ || !gpu_display_->swapchain ||
         !gpu_display_->enabled || !isVisible())
+        return false;
+
+    /* QWidget may receive paint events because a sibling, dock or tooltip was
+     * invalidated. Present only when canvas content actually changed or when
+     * an expose/resize explicitly requested a retained-frame refresh. On EGL,
+     * gs_present() may wait for the compositor; gratuitous presents therefore
+     * stall the entire Qt GUI thread. */
+    if (!force_present_pending_ && !playback_present_pending_ &&
+        !editing_present_pending_)
         return false;
 
     /* While transport is active, generic repaints may not create extra

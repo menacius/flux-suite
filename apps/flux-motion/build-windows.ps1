@@ -666,6 +666,7 @@ if ($SkipPackage) {
     Copy-Item -Force -LiteralPath (Join-Path $ScriptDir "VERSION.txt") -Destination $EditorDistributionDir
     Copy-Item -Force -LiteralPath (Join-Path $ScriptDir "docs\CHANGELOG.md") -Destination $EditorDistributionDir
     foreach ($ExcludedEditorArtifact in @(
+        "Flux Motion.pdb",
         "flux-motion-renderer.exe",
         "flux-motion-renderer.pdb",
         "flux-motion-editor.exe",

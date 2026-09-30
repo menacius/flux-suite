@@ -94,6 +94,7 @@
         add_anim(layer->stroke_color_a, 1.0 / 255.0); add_anim(layer->stroke_color_r, 1.0 / 255.0);
         add_anim(layer->stroke_color_g, 1.0 / 255.0); add_anim(layer->stroke_color_b, 1.0 / 255.0);
         add_anim(layer->stroke_offset_prop, 0.25);
+        add_anim(layer->stroke_width_prop, 0.25);
         add_anim(layer->background_enabled_prop, 1.0);
         add_anim(layer->background_opacity_prop, 0.002);
         add_anim(layer->background_padding_x_prop, 0.25);
@@ -229,6 +230,7 @@ bool CacheManager::titleHasTimelineChanges(const Title &title) const
             animated(layer->text_color_g) || animated(layer->text_color_b) ||
             animated(layer->fill_color_a) || animated(layer->fill_color_r) ||
             animated(layer->fill_color_g) || animated(layer->fill_color_b) ||
+            animated(layer->stroke_width_prop) ||
             animated(layer->stroke_color_a) || animated(layer->stroke_color_r) ||
             animated(layer->stroke_color_g) || animated(layer->stroke_color_b) ||
             animated(layer->chart_animation_progress) ||

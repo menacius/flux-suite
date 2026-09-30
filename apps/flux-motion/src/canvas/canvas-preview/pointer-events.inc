@@ -1023,7 +1023,7 @@ void CanvasPreview::apply_drag(const QPointF &view_pt, Qt::KeyboardModifiers mod
                                                           state.shape_inner_roundness,
                                                           state.path_corner_radii,
                                                           layer->rect_width,
-                                                          layer->rect_height);
+                                                          layer->rect_height, lt);
                 }
             }
         }
@@ -1280,7 +1280,7 @@ void CanvasPreview::apply_drag(const QPointF &view_pt, Qt::KeyboardModifiers mod
                                                       start_state->shape_inner_roundness,
                                                       start_state->path_corner_radii,
                                                       new_w,
-                                                      new_h);
+                                                      new_h, lt);
 
                 /* Size-backed layers must preserve their origin as a fraction
                  * of the resized dimensions. Reusing local_left/local_top as

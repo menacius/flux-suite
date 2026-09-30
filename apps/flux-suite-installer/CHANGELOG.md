@@ -1,3 +1,29 @@
+# 2026 - v0.8.20-alpha
+
+- Published the new OBS Scene Masks dock with compact Preview/Monitor sections,
+  joystick positioning, W–T zoom and adjustable smooth motion.
+- Added matching joystick/dial and numeric Scene Mask controls to source
+  properties while keeping live cues active during every transform change.
+- Added optional cover-style bounds enforcement so transformed scenes always
+  fill their mask without exposing empty space.
+- Kept Preview-only nested videos from starting until Program activation and
+  preserved configured OBS media playback behavior.
+- Made OBS dock shortcuts durable across plugin updates.
+- Retained the unchanged v0.8.18-alpha Flux Encoder package.
+
+# 2026 - v0.8.19-3
+
+- Republished Flux Motion with restored BGL-compatible Motion Blur, measured
+  editor FPS and unified image, SVG, PSD, XCF, video and audio importing through
+  File Import, drag-and-drop and clipboard paste.
+- Removed an avoidable whole-media-file RAM read and excluded debug image-format
+  binaries from the Flux Motion editor package.
+- Published the Flux Motion startup, timeline, Motion Blur, stroke, scene
+  switching and Live Text Cue fixes.
+- Made the captured production dock workspace the default for new Flux Motion
+  installations.
+- Retained the unchanged v0.8.18-alpha Flux Encoder package.
+
 # 2026 - v0.8.19-2-alpha
 
 - Published Unicode-safe Windows file access for Flux Motion and the Flux

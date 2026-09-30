@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 
-#include "../core/serialization-passthrough.h"
+#include "../../Core/serialization-passthrough.h"
 #include "animation.h"
 
 /* ══════════════════════════════════════════════════════════════════
@@ -308,4 +308,3 @@ struct LayerEffect {
 LayerEffectSpace layer_effect_execution_space(const LayerEffect &effect);
 bool layer_effect_stack_has_space(const std::vector<LayerEffect> &effects,
                                   LayerEffectSpace space);
-
