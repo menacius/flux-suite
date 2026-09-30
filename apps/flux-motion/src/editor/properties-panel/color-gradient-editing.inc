@@ -897,7 +897,7 @@
                 });
                 connect(weight, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
                         &popup, [this, inline_stroke, apply_text_char_format,
-                                 current_text_char_format, emit_change](double v) {
+                                 current_text_char_format, local_time, emit_change](double v) {
                             if (!layer_ || loading_values_) return;
                             if (inline_stroke) {
                                 RichTextCharFormat fmt = current_text_char_format();
@@ -908,7 +908,10 @@
                                 apply_text_char_format(fmt, RichTextCharStroke);
                             } else {
                                 layer_->stroke_width = (float)v;
-                                layer_->outline_enabled = v > 0.0;
+                                set_animated_value(layer_->stroke_width_prop,
+                                                   local_time(), v);
+                                layer_->outline_enabled =
+                                    v > 0.0 || layer_->stroke_width_prop.is_animated();
                                 if (v > 0.0 && layer_->stroke_fill_type == 0)
                                     layer_->stroke_fill_type = 1;
                             }

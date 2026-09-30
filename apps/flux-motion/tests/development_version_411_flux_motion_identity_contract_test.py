@@ -57,7 +57,7 @@ assert "fxm_apply_satoshi_ui_font(this);" in editor
 assert 'id="fxm-version"' in svg
 assert 'id="fxm-development-version"' in svg
 assert 'id="fxm-copyright"' in svg
-assert "2026 - v0.8.19-1-alpha" in svg
+assert "2026 - v0.8.20-alpha" in svg
 assert "&#169; 2026 OMNIATV. ALL RIGHTS RESERVED." in svg
 assert 'font-family: Satoshi-Medium, Satoshi;' in svg
 assert 'transform="translate(284.18 254.71)"' in svg

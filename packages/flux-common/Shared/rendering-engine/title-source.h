@@ -53,6 +53,12 @@ enum class TitlePlaybackState : uint8_t {
 
 /* Registers the source type with OBS. Call once from obs_module_load(). */
 void title_source_register();
+using SceneMaskControlsOpener = void (*)(obs_source_t *source,
+                                         const char *layer_id);
+/* Optional host UI hook used by the OBS plugin to expose richer scene-mask
+ * controls without coupling the shared source implementation to Qt widgets. */
+void title_source_set_scene_mask_controls_opener(
+    SceneMaskControlsOpener opener);
 void release_title_gpu_render_resources();
 /* Invalidates every live source presentation at a frontend lifecycle boundary
  * (most importantly scene-collection cleanup/change).  The next video tick
@@ -266,3 +272,4 @@ bool title_gpu_render_session_submit_gpu_cached_prefix(
 #define PROP_CUE_FIRST_ROW_WHEN_ACTIVE "cue_first_row_when_active"
 #define PROP_SCENE_MASKS_GROUP "scene_masks"
 #define PROP_SCENE_MASK_PREFIX "scene_mask_"
+#define PROP_SCENE_MASK_CLIP_TO_BOUNDS "scene_masks_clip_to_bounds"

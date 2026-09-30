@@ -1,9 +1,40 @@
-# 2026 - v0.8.19-1-alpha
+# 2026 - v0.8.20-alpha
 
-- Split ordinary 2D layer copying from the advanced lighting/shadow shader to
-  prevent long D3D compilation stalls on affected Windows systems.
-- Added the legacy Broadcast Graphics Live source identifier so existing OBS
-  scene collections continue to load after upgrading.
+- Added the Scene Masks dock with automatic Preview/Program population,
+  joystick positioning and W–T zoom controls.
+- Prevented Preview-only mask scenes from activating nested video playback;
+  Program activation now follows the media source's configured behavior.
+- Made dock hotkey persistence update-safe through OBS change notifications and
+  an atomic plugin-config backup.
+- Kept active cues intact while mask position and zoom are adjusted live.
+- Added compact Preview/Monitor sections and adjustable Smooth Motion for
+  joystick, zoom, Center and Reset operations.
+- Added joystick/dial controls with optional numeric entry in source
+  properties and synchronized their clamped values with the dock.
+- Added optional cover-style bounds enforcement so every transformed scene
+  fully covers its mask without empty space.
+- Removed the redundant per-mask Crop when out of mask box setting.
+
+# 2026 - v0.8.19-3
+
+- Restored Broadcast Graphics Live-compatible temporal Motion Blur sampling
+  density while keeping its sample budget bounded.
+- Removed synchronous title-store loading and disk-cache indexing from OBS
+  module startup.
+- Preserved resident GPU frames across ordinary scene changes.
+- Added bounded temporal Motion Blur for Adjustment Layers and optimized
+  scaling-layer sampling.
+- Kept active Live Text cues on air while their list data is edited.
+
+# 2026 - v0.8.19-2-alpha
+
+- Fixed project loading when `.fxmproj` files or their parent folders contain
+  Greek or other non-ASCII characters on Windows.
+- Fixed Unicode-path filesystem metadata and dependency-free WAV reads in the
+  OBS audio runtime.
+- Retained the existing project schema and title selection behavior.
+
+# 2026 - v0.8.19-alpha
 
 - Kept new OBS-created titles on the active OBS resolution and frame-rate
   defaults without showing the standalone New Title format dialog.

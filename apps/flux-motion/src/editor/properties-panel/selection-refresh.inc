@@ -424,7 +424,8 @@
     }
     if (btn_appearance_stroke_label_) btn_appearance_stroke_label_->setVisible(supports_outline);
     if (spn_appearance_stroke_width_) {
-        spn_appearance_stroke_width_->setValue(layer_->stroke_width);
+        spn_appearance_stroke_width_->setValue(layer_->stroke_width_prop.is_animated()
+            ? layer_->stroke_width_prop.evaluate(lt) : layer_->stroke_width);
         spn_appearance_stroke_width_->setEnabled(supports_outline);
         spn_appearance_stroke_width_->setVisible(supports_outline);
     }
@@ -771,6 +772,10 @@
     int ticker_direction_idx = cmb_ticker_direction_->findData(layer_->ticker_direction);
     cmb_ticker_direction_->setCurrentIndex(ticker_direction_idx >= 0 ? ticker_direction_idx : 0);
     int fi = cmb_font_->findText(QString::fromStdString(layer_->font_family));
+    if (fi < 0) {
+        cmb_font_->addItem(QString::fromStdString(layer_->font_family));
+        fi = cmb_font_->count() - 1;
+    }
     if (fi >= 0) cmb_font_->setCurrentIndex(fi);
     populate_font_style_combo(cmb_font_style_, QString::fromStdString(layer_->font_family), QString::fromStdString(layer_->font_style));
     spn_size_->setValue((int)std::clamp(std::round(layer_->font_size_prop.is_animated() ? layer_->font_size_prop.evaluate(lt) : (double)layer_->font_size), 1.0, 512.0));
@@ -823,6 +828,10 @@
         const RichTextCharFormat &fmt = summary.format;
         rich_font_family_mixed = summary.mixed & RichTextCharFontFamily;
         int rich_fi = cmb_font_->findText(QString::fromStdString(fmt.font_family));
+        if (rich_fi < 0) {
+            cmb_font_->addItem(QString::fromStdString(fmt.font_family));
+            rich_fi = cmb_font_->count() - 1;
+        }
         if (rich_fi >= 0) cmb_font_->setCurrentIndex(rich_fi);
         populate_font_style_combo(cmb_font_style_, QString::fromStdString(fmt.font_family), QString::fromStdString(fmt.font_style));
         int rich_style_i = cmb_font_style_->findText(QString::fromStdString(fmt.font_style));
@@ -1123,13 +1132,14 @@
                          paragraph_summary.mixed & RichTextParagraphHyphenate);
     }
 
-    QFontDatabase fdb;
+    const auto *lazy_fonts = dynamic_cast<const LazyFontComboBox *>(cmb_font_);
+    const QString selected_family = QString::fromStdString(layer_->font_family);
+    const bool can_check_family = lazy_fonts && lazy_fonts->fontsLoaded();
     cmb_font_->setToolTip(rich_font_family_mixed
         ? fxm_tr("OBSTitles.MixedValues")
-        : (fdb.families().contains(QString::fromStdString(layer_->font_family))
-            ? QString()
-            : fxm_tr("OBSTitles.FontMissingWarningFormat").arg(
-                  QString::fromStdString(layer_->font_family))));
+        : (can_check_family && !lazy_fonts->containsLoadedFamily(selected_family)
+            ? fxm_tr("OBSTitles.FontMissingWarningFormat").arg(selected_family)
+            : QString()));
 
     if (text_animators_box_ && is_text_like)
         refresh_text_animator_controls();

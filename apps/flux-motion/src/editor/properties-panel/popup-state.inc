@@ -2118,17 +2118,14 @@ PropertiesPanel::PropertiesPanel(QWidget *parent) : QScrollArea(parent)
     cmb_clock_preset_->addItem(QStringLiteral("Unix Timestamp"), QStringLiteral("U"));
     cmb_clock_preset_->addItem(QStringLiteral("Custom"), QStringLiteral("__custom__"));
 
-    cmb_font_ = new QComboBox(inner);
+    cmb_font_ = new LazyFontComboBox(inner);
     cmb_font_->setFixedHeight(20);
     cmb_font_->setEditable(true);
     cmb_font_->setInsertPolicy(QComboBox::NoInsert);
     cmb_font_->setMaxVisibleItems(24);
     cmb_font_->setStyleSheet(control_style);
-    QFontDatabase fdb;
-    for (auto &fam : fdb.families())
-        cmb_font_->addItem(fam, fam);
 
-    cmb_font_style_ = new QComboBox(inner);
+    cmb_font_style_ = new LazyFontStyleComboBox(inner);
     cmb_font_style_->setFixedHeight(20);
     cmb_font_style_->setStyleSheet(control_style);
 

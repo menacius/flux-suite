@@ -80,11 +80,17 @@ int main(int argc, char **argv)
                   "if (!layer_keyframe_sections_expanded(*l)) continue;",
                   "layer list consumes the shared predicate");
     ok &= require(layers,
-                  "const bool expanded = !is_group && layer_keyframe_sections_expanded(*l);",
+                  "const bool expanded = !is_expandable_container && layer_keyframe_sections_expanded(*l);",
                   "layer-list caret reflects the shared predicate");
     ok &= require(timeline,
-                  "if (!layer_keyframe_sections_expanded(*entry.layer) || entry.layer->locked) continue;",
+                  "if (!entry.is_property || !entry.prop) continue;",
                   "keyframe marquee selection follows visible property rows");
+    ok &= require(timeline,
+                  "An empty property row is also a valid start for a marquee spanning",
+                  "marquee can begin on one timeline and span other timelines");
+    ok &= require(timeline,
+                  "const bool property_row = row >= 0 && row < (int)rows.size() &&",
+                  "property-row marquee retains the selected layer context");
     ok &= require(timeline,
                   "return entry.is_property && entry.prop && test_prop(entry.prop);",
                   "collapsed strips have no hidden aggregate keyframe hit targets");
@@ -97,8 +103,10 @@ int main(int argc, char **argv)
 
     ok &= absent(layers, "add_header_icon(\"matte-source.svg\"",
                  "obsolete separate matte-source header icon");
-    ok &= require(layers, "add_header_icon(\"matte-destination.svg\"",
-                  "single matte-role header icon");
+    ok &= require(layers, "add_header_icon(\"matte-alpha.svg\"",
+                  "matte channel header icon");
+    ok &= require(layers, "add_header_icon(\"matte-normal.svg\"",
+                  "matte inversion header icon");
     ok &= require(layers, "add_matte_indicator(\"matte-source.svg\"",
                   "matte-source row icon");
     ok &= require(layers, "add_matte_indicator(\"matte-destination.svg\"",
@@ -106,9 +114,9 @@ int main(int argc, char **argv)
     ok &= require(layers,
                   "make_toggle(\"layer-lock.svg\", \"layer-unlock.svg\"",
                   "lock states remain on the OBS-theme icon path");
-    ok &= require(layers, "obs_icon(\"no-visibility.svg\")",
+    ok &= require(layers, "set_layer_row_button_icon(vis, \"no-visibility.svg\")",
                   "hidden visibility state uses supplied icon");
-    ok &= require(layers, "obs_icon(\"visibility-matte.svg\")",
+    ok &= require(layers, "set_layer_row_button_icon(vis, \"visibility-matte.svg\")",
                   "matte-only visibility state uses supplied icon");
 
     ok &= theme_icon(lock, "lock icon");

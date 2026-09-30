@@ -161,6 +161,14 @@ static gs_texrender_t *fxm_create_motion_blur_accumulation_target()
 static bool alias_global_gpu_frame_locked(
     const std::string &cache_key, const std::string &canonical_cache_key);
 
+static SceneMaskControlsOpener g_scene_mask_controls_opener = nullptr;
+
+void title_source_set_scene_mask_controls_opener(
+    SceneMaskControlsOpener opener)
+{
+    g_scene_mask_controls_opener = opener;
+}
+
 
 /* Ordered implementation modules. Keep this list in source order. The shared
  * session implementation includes the explicit extent/time render contract. */

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "animation.h"
-#include "../core/serialization-passthrough.h"
+#include "../../Core/serialization-passthrough.h"
 
 #include <algorithm>
 #include <cmath>

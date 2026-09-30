@@ -1,6 +1,6 @@
 {
   "name": "flux-motion-deps",
-  "version-string": "0.8.19-1-alpha",
+  "version-string": "0.8.20-alpha",
   "dependencies": [
     "cairo",
     "pango",

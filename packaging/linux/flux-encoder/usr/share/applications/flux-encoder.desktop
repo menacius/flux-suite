@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Flux Encoder
+Comment=Encode media with Flux Suite
+Exec=flux-encoder
+Icon=flux-encoder
+Terminal=false
+Categories=AudioVideo;Utility;
+StartupNotify=true

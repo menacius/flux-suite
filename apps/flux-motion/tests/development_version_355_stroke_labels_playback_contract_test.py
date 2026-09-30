@@ -41,8 +41,8 @@ assert "connect(btn_kf_appearance_stroke_" in property_sync
 assert "install_group_delete_all(btn_kf_appearance_stroke_" in property_menus
 assert "set_group_kf_icon(btn_kf_appearance_stroke_" in refresh
 
-# Stroke is a persisted four-channel ARGB animation, exposed to the timeline,
-# render evaluation, cache/runtime animation detection and bounds collection.
+# Stroke color and size share one keyframe control. Width is persisted and
+# evaluated in the timeline/render/cache/runtime paths along with ARGB.
 for channel in "argb":
     name = f"stroke_color_{channel}"
     assert name in model
@@ -54,6 +54,14 @@ for channel in "argb":
     assert name in source_runtime
     assert name in asset_runtime
 assert 'scalar_group_timeline_property("stroke_color"' in hierarchy
+assert 'stroke_width_prop { "stroke_width", 0.0 }' in model
+assert 'j["stroke_width_prop"] = aprop_to_json' in serialization
+assert 'j.contains("stroke_width_prop")' in serialization
+assert '{&layer.stroke_width_prop, nullptr}' in hierarchy
+assert 'if (name == "stroke_width") return fxm_tr("OBSTitles.StrokeWidth")' in hierarchy
+assert 'layer.stroke_width_prop.evaluate(t)' in render
+assert 'layer.stroke_width_prop.is_animated()' in source_runtime
+assert 'layer.stroke_width_prop.is_animated()' in asset_runtime
 assert "return eval_stroke_color(layer, t);" in render
 assert "stroke color keyframes must mark an asset as animated" in asset_runtime_test
 

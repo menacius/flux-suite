@@ -1327,10 +1327,12 @@ static void *source_create(obs_data_t *settings, obs_source_t *source)
         });
     data->last_tick = std::chrono::steady_clock::now();
     data->last_clock_refresh = data->last_tick;
-    if (auto title = source_title_snapshot(data)) {
-        data->seen_cue_revision = title->cue_revision;
-        data->force_cue_state_sync = title->current_cue_row >= 0 ||
-            title->pending_cue_row >= 0 || title->cue_uncue_requested;
+    auto initial_title = source_title_snapshot(data);
+    if (initial_title) {
+        data->seen_cue_revision = initial_title->cue_revision;
+        data->force_cue_state_sync = initial_title->current_cue_row >= 0 ||
+            initial_title->pending_cue_row >= 0 ||
+            initial_title->cue_uncue_requested;
     }
     /* Force one complete store/session reconciliation after startup. Source
      * creation can run while the title store and cache index are still being
@@ -1339,9 +1341,16 @@ static void *source_create(obs_data_t *settings, obs_source_t *source)
      * state. */
     data->seen_store_revision = std::numeric_limits<uint64_t>::max();
     data->seen_external_data_revision = std::numeric_limits<uint64_t>::max();
-    apply_source_cue_end_state(
-        data, source_title_snapshot(data),
-        "source-created-cue-end-state");
+    if (initial_title) {
+        apply_source_cue_end_state(
+            data, initial_title, "source-created-cue-end-state");
+    } else {
+        /* During scene-collection restore this is commonly a transient miss:
+         * source creation precedes TitleDataStore::load() for the incoming
+         * collection. Applying the null-title fallback here hid the source and
+         * it stayed hidden until an unrelated cue made it visible again. */
+        data->initial_title_state_pending = true;
+    }
     sync_source_audio_active(
         data, source_title_snapshot(data),
         "source-created");
@@ -1399,18 +1408,34 @@ static void source_update(void *priv, obs_data_t *settings)
     if (!data || !settings) return;
     const std::string previous_title_id = data->title_id;
     const std::string previous_project_path = data->project_path;
-    clear_live_cue_runtime_for_source(data, previous_title_id);
-    data->cue_timer_row = -1;
-    data->cue_timer_elapsed_seconds = 0.0;
-    const bool keep_scene_masks_foreground = data->scene_mask_foreground_active;
-    if (keep_scene_masks_foreground)
+    const std::string next_project_path =
+        obs_data_get_string(settings, PROP_PROJECT_PATH);
+    const std::string next_title_id =
+        obs_data_get_string(settings, PROP_TITLE_ID);
+    const bool title_changed = next_title_id != previous_title_id ||
+        next_project_path != previous_project_path;
+    /* Scene-mask properties share OBS's source_update callback with the title
+     * binding.  Updating a scene, fit, position or zoom is a visual refresh,
+     * not a transport operation: keep the current cue and its runtime timer. */
+    if (title_changed) {
+        clear_live_cue_runtime_for_source(data, previous_title_id);
+        data->cue_timer_row = -1;
+        data->cue_timer_elapsed_seconds = 0.0;
+    }
+    const bool keep_scene_masks_visible =
+        data->shown_on_display.load(std::memory_order_acquire);
+    if (keep_scene_masks_visible)
         release_active_scene_mask_scenes(data);
 
-    data->project_path = obs_data_get_string(settings, PROP_PROJECT_PATH);
-    data->title_id = obs_data_get_string(settings, PROP_TITLE_ID);
-    reload_source_project(data, true);
+    data->project_path = next_project_path;
+    data->title_id = next_title_id;
+    /* Do not reconstruct an unchanged project-backed title merely because a
+     * mask property changed; that would discard its in-memory cue state.  The
+     * normal timestamp check still picks up a genuinely modified project. */
+    reload_source_project(data, title_changed);
     obs_data_set_string(settings, PROP_TITLE_ID, data->title_id.c_str());
-    if (data->audio_runtime) data->audio_runtime->stop(false);
+    if (title_changed && data->audio_runtime)
+        data->audio_runtime->stop(false);
     data->cue_first_row_when_active = obs_data_get_bool(settings, PROP_CUE_FIRST_ROW_WHEN_ACTIVE);
     data->editor_audio_preview = obs_data_get_bool(settings, "editor_audio_preview");
     data->editor_transport_controlled =
@@ -1418,8 +1443,6 @@ static void source_update(void *priv, obs_data_t *settings)
     data->editor_playback_reverse = false;
     if (data->audio_runtime)
         data->audio_runtime->set_editor_preview(data->editor_audio_preview);
-    const bool title_changed = data->title_id != previous_title_id ||
-        data->project_path != previous_project_path;
     if (title_changed) {
         request_source_presentation_reset(data, "source-title-binding-changed");
         data->visual_identity_hash.clear();
@@ -1430,15 +1453,21 @@ static void source_update(void *priv, obs_data_t *settings)
     }
     bind_source_cache_wake_title(data->cache_wake_state, data->title_id);
     refresh_scene_mask_configs(data, settings);
-    apply_source_cue_end_state(
-        data, source_title_snapshot(data),
-        "source-updated-cue-end-state");
+    auto updated_title = source_title_snapshot(data);
+    if (updated_title && title_changed) {
+        apply_source_cue_end_state(
+            data, updated_title, "source-updated-cue-end-state");
+        data->initial_title_state_pending = false;
+    } else if (!updated_title && title_changed) {
+        data->initial_title_state_pending = true;
+    }
     data->seen_audio_membership_revision =
         std::numeric_limits<uint64_t>::max();
     sync_source_audio_active(
         data, source_title_snapshot(data),
         "source-updated");
-    if (auto title = source_title_snapshot(data)) {
+    if (title_changed && updated_title) {
+        const auto &title = updated_title;
         data->seen_cue_revision = title->cue_revision;
         /* The dock selection and OBS source-settings update are asynchronous.
          * A cue can therefore be issued for the newly selected title before
@@ -1456,7 +1485,7 @@ static void source_update(void *priv, obs_data_t *settings)
                          .arg(title->pending_cue_row)
                          .arg(static_cast<qulonglong>(title->cue_revision)));
         }
-    } else {
+    } else if (title_changed) {
         data->seen_cue_revision = 0;
         data->force_cue_state_sync = false;
     }
@@ -1469,7 +1498,7 @@ static void source_update(void *priv, obs_data_t *settings)
     data->dirty = true;
     data->first_frame_pending = true;
     data->consecutive_draw_failures = 0;
-    if (keep_scene_masks_foreground)
+    if (keep_scene_masks_visible)
         sync_scene_mask_scenes_for_cue(
             data, source_title_snapshot(data));
     FXM_LOG_INFO("Source", QStringLiteral(
@@ -1486,19 +1515,19 @@ static bool cue_first_live_text_row_on_activation(
         return false;
 
     auto exposed = exposed_text_layers(title);
-    if (exposed.empty())
-        return false;
-
-    fxm::live_text::normalize_live_text_rows(title, exposed);
-    if (title->live_text_rows.empty())
-        return false;
+    if (!exposed.empty()) {
+        fxm::live_text::normalize_live_text_rows(title, exposed);
+        if (title->live_text_rows.empty())
+            return false;
+        apply_live_text_row(title, 0);
+    }
 
     /* Activation starts from a clean first-row state. Unlike a cue issued
      * while the source is already live, there is no outgoing frame that needs
      * an outro/persistence hand-off. Apply the values immediately and let the
      * normal source cue state machine start the intro/playback on the next
-     * video tick. */
-    apply_live_text_row(title, 0);
+     * video tick. Titles without exposed fields use the same synthetic row
+     * zero as the dock Cue button. */
     title->current_cue_row = 0;
     title->pending_cue_row = -1;
     title->cue_uncue_requested = false;
@@ -1524,16 +1553,18 @@ static void source_activate(void *priv)
     if (!data)
         return;
     data->scene_mask_foreground_active = true;
-    /* OBS can deactivate/reactivate sources while graphics resources or cache
-     * payloads are being restored. Never trust the previous clean flag across
-     * activation; require a fresh successful draw. */
-    data->dirty = true;
-    data->first_frame_pending = true;
+    /* Keep an already-published same-source frame immediately presentable on
+     * ordinary scene activation. The next video tick still compares store,
+     * external-data and presentation generations before its clean fast path;
+     * actual model/resource changes therefore mark the session dirty without
+     * making every scene switch wait for cache lookup and graph preparation. */
     data->consecutive_draw_failures = 0;
     FXM_LOG_DEBUG("Source", QStringLiteral("Activated source title=%1")
         .arg(QString::fromStdString(data->title_id)));
 
     auto title = source_title_mutable(data);
+    data->activation_cue_pending =
+        data->cue_first_row_when_active && !title;
     cue_first_live_text_row_on_activation(data, title);
     sync_scene_mask_scenes_for_cue(data, title);
     if (!title || !title->playlist_restart_on_source_active)
@@ -1570,17 +1601,21 @@ static void source_deactivate(void *priv)
     if (!data)
         return;
     data->scene_mask_foreground_active = false;
+    data->activation_cue_pending = false;
     if (data->audio_runtime) data->audio_runtime->stop(true);
     clear_live_cue_runtime_for_source(data, data->title_id);
     data->cue_timer_row = -1;
     data->cue_timer_elapsed_seconds = 0.0;
     FXM_LOG_DEBUG("Source", QStringLiteral("Deactivated source title=%1")
         .arg(QString::fromStdString(data->title_id)));
-    release_active_scene_mask_scenes(data);
-    /* A deactivated source may remain alive across a scene or collection
-     * change. Do not allow its old poster texture to become visible again
-     * before the reactivated source has reconciled its current title. */
-    request_source_presentation_reset(data, "source-deactivated");
+    /* Deactivation removes the source from Program, but in Studio Mode it may
+     * remain showing in Preview. Keep (or reacquire) mask-scene content for
+     * that display; source_hide performs the final balanced release. */
+    sync_scene_mask_scenes_for_cue(data, source_title_snapshot(data));
+    /* Keep the resident frame across ordinary scene changes. Binding updates
+     * and scene-collection generation changes already invalidate presentation
+     * state; throwing it away for every deactivate made the next scene wait
+     * for a complete title/effect rebuild. */
 
     auto title = source_title_mutable(data);
     if (!title || !title->playlist_stop_on_source_inactive || !title->playlist_active)
@@ -1597,15 +1632,12 @@ static void source_show(void *priv)
     auto *data = static_cast<TitleSourceData *>(priv);
     if (!data)
         return;
-    /* show/hide covers projector and Studio-preview visibility as well as the
-     * main output. Reconcile the current model before the source becomes
-     * eligible to present a poster retained while it was not shown anywhere. */
+    /* The next tick reconciles model/external-data revisions before its clean
+     * fast path. Preserve both the resident frame and its clean state so a
+     * normal scene switch can present immediately. */
     data->shown_on_display.store(true, std::memory_order_release);
     FXM_LOG_TRACE("Source", QStringLiteral("Source shown title=%1")
         .arg(QString::fromStdString(data->title_id)));
-    request_source_presentation_reset(data, "source-shown");
-    data->dirty = true;
-    data->first_frame_pending = true;
     sync_scene_mask_scenes_for_cue(
         data, source_title_snapshot(data));
 }

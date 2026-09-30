@@ -185,6 +185,8 @@ private:
     };
     mutable QMutex mutex_;
     QString cache_dir_;
+    mutable QReadWriteLock location_mutex_;
+    QString cache_dir_snapshot_;
     QHash<QString, CacheFrameKey> indexed_keys_;
     mutable QReadWriteLock membership_mutex_;
     QSet<QString> indexed_membership_;
@@ -192,6 +194,7 @@ private:
     QHash<QByteArray, qsizetype> tile_ref_counts_;
     quint64 bytes_used_ = 0;
     std::atomic<quint64> bytes_used_snapshot_{0};
+    std::atomic<bool> index_ready_{false};
     std::mutex writer_mutex_;
     std::condition_variable writer_cv_;
     std::condition_variable writer_idle_cv_;

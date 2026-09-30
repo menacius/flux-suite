@@ -48,3 +48,24 @@ def test_exposure_alpha_is_mathematically_bounded_by_max_coverage():
     coverage = max(samples)
     assert exposure <= coverage
     assert min(exposure, coverage) == exposure
+
+
+def test_adjustment_layers_use_bounded_composition_history():
+    renderer = read("../../packages/flux-common/Shared/rendering-engine/title-source/gpu-presentation-readback.inc")
+    lifecycle = read("../../packages/flux-common/Shared/rendering-engine/title-source/gpu-session-lifecycle.inc")
+    presentation = read("../../packages/flux-common/Shared/rendering-engine/title-source/source-lifecycle-playback.inc")
+    resources = read("../../packages/flux-common/Shared/rendering-engine/title-source/gpu-masks-groups-cache.inc")
+    assert "static gs_texture_t *apply_gpu_adjustment_motion_blur(" in renderer
+    assert "title_gpu_render_session_is_realtime_output(session) ? 6 : 12" in renderer
+    assert "AdjustmentMotionHistory" in resources
+    assert "apply_gpu_adjustment_motion_blur(" in lifecycle
+    assert "apply_gpu_adjustment_motion_blur(" in presentation
+
+
+def test_transform_scale_keeps_the_resident_texture_fast_path():
+    runtime = read("../../packages/flux-common/Shared/rendering-engine/title-source/source-runtime.inc")
+    start = runtime.index("static bool layer_non_transform_animation_changes_during_interval")
+    end = runtime.index("static bool layer_has_animation", start)
+    predicate = runtime[start:end]
+    assert "layer.scale" not in predicate
+    assert "scale_stroke_with_shape" not in predicate

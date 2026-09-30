@@ -50,8 +50,8 @@ assert "if (final_frame_readback_only())" in gpu_text
 assert "text_renderer->compile_effect()" in gpu_text
 assert "settle_loaded_title_layout" in editor
 
-assert "project(flux-motion VERSION 0.8.19)" in cmake
-assert 'set(OBS_FXM_DEVELOPMENT_VERSION "420")' in cmake
-assert version == "2026 - v0.8.19-1-alpha"
+assert "project(flux-motion VERSION 0.8.20)" in cmake
+assert 'set(OBS_FXM_DEVELOPMENT_VERSION "422")' in cmake
+assert version == "2026 - v0.8.20-alpha"
 
 print("Standalone title/cache playback v0.8.19 contract passed")

@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "suiteVersion": "2026 - v0.8.19-1-alpha",
+  "suiteVersion": "2026 - v0.8.20-alpha",
   "channel": "Alpha",
   "products": [
     {
@@ -18,6 +18,7 @@
       "size": 161930391,
       "installFolder": "Flux Encoder",
       "executable": "Flux Encoder.exe",
+      "linuxExecutable": "flux-encoder",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
@@ -35,26 +36,27 @@
       "name": "Flux Motion",
       "tagline": "Real-time graphics authoring",
       "description": "Design broadcast graphics, titles and motion scenes in one focused workspace.",
-      "version": "2026 - v0.8.19-1-alpha",
+      "version": "2026 - v0.8.20-alpha",
       "accent": "#ff416c",
       "glyph": "FM",
       "icon": ":/flux/icons/flux-motion.svg",
-      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.19-1-alpha_windows-x64.zip",
+      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.20-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "66678ce7afa0ebdc2c7505b7db4377c60a9826833881aa024e8bd787d3555e92",
-      "size": 57974712,
+      "sha256": "529184f7bbf00385b901e2a116465351b21f62f0aa9b4c6beb95db42a956e076",
+      "size": 58661878,
       "installFolder": "Flux Motion",
       "executable": "Flux Motion.exe",
+      "linuxExecutable": "flux-motion",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.18-alpha",
-        "version": "2026 - v0.8.19-1-alpha",
+        "fromVersion": "2026 - v0.8.19-3",
+        "version": "2026 - v0.8.20-alpha",
         "entries": [
-          "Eliminated the multi-minute first-render freeze by keeping ordinary 2D layer copies on a compact GPU shader and loading advanced lighting/shadow code only when a 3D lit layer needs it.",
-          "Added a real-layer GPU startup smoke test covering both initial shader compilation and compositor readback.",
-          "Retained the native Chart, adaptive playback, Welcome screen and cache improvements from the v0.8.19 alpha release."
+          "Added Scene Mask source controls with joystick positioning, W-T zoom and optional numeric entry.",
+          "Added cover-style bounds enforcement so transformed scenes fully cover their masks without empty space.",
+          "Removed the redundant per-mask Crop when out of mask box setting."
         ]
       }
     },
@@ -63,26 +65,29 @@
       "name": "Flux Motion Plugin for OBS",
       "tagline": "Native OBS graphics integration",
       "description": "Cue and render Flux Motion projects directly inside OBS Studio.",
-      "version": "2026 - v0.8.19-1-alpha",
+      "version": "2026 - v0.8.20-alpha",
       "accent": "#14c9b3",
       "glyph": "FX",
       "icon": ":/flux/icons/flux-motion-obs.svg",
-      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.19-1-alpha_windows-x64.zip",
+      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.20-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "c327ba06e4f58f4e3dd899ef079483b3d75200ac95f262275a830a6c891ff1e8",
-      "size": 20713537,
+      "sha256": "4c1e762920c9e2b28a34637632703a45b72375281e58694bcf01ebe4dfa312f1",
+      "size": 20452553,
       "installFolder": "flux-motion",
       "executable": "bin/64bit/flux-motion.dll",
+      "linuxExecutable": "bin/64bit/flux-motion.so",
       "packageRoot": "flux-motion",
       "kind": "obs-plugin",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.18-alpha",
-        "version": "2026 - v0.8.19-1-alpha",
+        "fromVersion": "2026 - v0.8.19-3",
+        "version": "2026 - v0.8.20-alpha",
         "entries": [
-          "Eliminated the OBS graphics-thread freeze caused by multi-minute compilation of unused 3D lighting and shadow shader code.",
-          "Registered the legacy Broadcast Graphics Live source identifier so existing OBS scenes continue to load after the obsolete plugin is removed.",
-          "Retained the shared native Chart renderer, host resolution/frame-rate handling and deterministic cache behavior from v0.8.19 alpha."
+          "Added a compact Scene Masks dock with separate Preview and Monitor sections, joystick positioning and W-T zoom.",
+          "Added adjustable Smooth Motion for live transforms, Center and Reset.",
+          "Kept Preview-only nested videos stopped until Program activation and preserved configured OBS playback behavior.",
+          "Made dock shortcuts durable across plugin updates and kept active cues intact during source changes.",
+          "Applied optional cover-style bounds enforcement consistently from both the dock and source properties."
         ]
       }
     }

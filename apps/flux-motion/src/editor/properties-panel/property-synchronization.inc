@@ -38,11 +38,13 @@
                 const uint32_t color = eval_stroke_color(*layer_, t);
                 if (any_keyframe_at_time(
                         {&layer_->stroke_color_a, &layer_->stroke_color_r,
-                         &layer_->stroke_color_g, &layer_->stroke_color_b}, t)) {
+                         &layer_->stroke_color_g, &layer_->stroke_color_b,
+                         &layer_->stroke_width_prop}, t)) {
                     remove_keyframe_at(layer_->stroke_color_a, t);
                     remove_keyframe_at(layer_->stroke_color_r, t);
                     remove_keyframe_at(layer_->stroke_color_g, t);
                     remove_keyframe_at(layer_->stroke_color_b, t);
+                    remove_keyframe_at(layer_->stroke_width_prop, t);
                 } else {
                     add_or_replace_keyframe(layer_->stroke_color_a, t,
                                             (color >> 24) & 0xFF);
@@ -52,6 +54,10 @@
                                             (color >> 8) & 0xFF);
                     add_or_replace_keyframe(layer_->stroke_color_b, t,
                                             color & 0xFF);
+                    add_or_replace_keyframe(layer_->stroke_width_prop, t,
+                                            layer_->stroke_width_prop.is_animated()
+                                                ? layer_->stroke_width_prop.evaluate(t)
+                                                : layer_->stroke_width);
                 }
                 load_values();
                 emit_change();
@@ -1516,7 +1522,8 @@ void PropertiesPanel::update_playhead(double t)
                                                     &layer_->fill_color_g, &layer_->fill_color_b});
     set_group_kf_icon(btn_kf_appearance_stroke_,
                       {&layer_->stroke_color_a, &layer_->stroke_color_r,
-                       &layer_->stroke_color_g, &layer_->stroke_color_b});
+                       &layer_->stroke_color_g, &layer_->stroke_color_b,
+                       &layer_->stroke_width_prop});
 }
 
 void PropertiesPanel::update_ticker_runtime_button()
@@ -1674,7 +1681,10 @@ void PropertiesPanel::load_values()
         if (spn_rect_corner_bl_) spn_rect_corner_bl_->setValue(0.0);
         if (spn_corner_bevel_roundness_) spn_corner_bevel_roundness_->setValue(100.0);
         spn_size_->setValue(72);
-        if (cmb_font_style_) populate_font_style_combo(cmb_font_style_, cmb_font_->currentText(), fxm_tr("OBSTitles.Regular"));
+        if (cmb_font_style_) {
+            cmb_font_style_->clear();
+            cmb_font_style_->addItem(fxm_tr("OBSTitles.Regular"));
+        }
         chk_bold_->setChecked(false);
         chk_italic_->setChecked(false);
         if (chk_font_kerning_) chk_font_kerning_->setChecked(true);

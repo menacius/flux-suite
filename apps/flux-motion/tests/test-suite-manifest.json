@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "development_version": 420,
+  "development_version": 422,
   "default_timeout_seconds": 90,
   "required_areas": [
     "editor_gui",
@@ -17,6 +17,8 @@
   "areas": {
     "editor_gui": {
       "python": [
+        "tests/development_version_422_scene_mask_dock_contract_test.py",
+        "tests/dock_focus_scene_mask_preview_contract_test.py",
         "tests/development_version_417_multi_title_project_contract_test.py",
         "tests/development_version_415_flux_encoder_preference_contract_test.py",
         "tests/development_version_414_flux_encoder_export_contract_test.py",
@@ -284,6 +286,7 @@
     },
     "cache_proxy_threading": {
       "python": [
+        "tests/obs_startup_async_disk_cache_index_contract_test.py",
         "tests/development_version_399_close_point_text_shadow_projection_contract_test.py",
         "tests/development_version_398_planar_shadow_text_continuity_contract_test.py",
         "tests/development_version_397_text_shadow_source_size_contract_test.py",
@@ -355,6 +358,8 @@
     },
     "persistence_cueing": {
       "python": [
+        "tests/dock_focus_scene_mask_preview_contract_test.py",
+        "tests/obs_deferred_title_restore_activation_contract_test.py",
         "tests/development_version_399_close_point_text_shadow_projection_contract_test.py",
         "tests/development_version_398_planar_shadow_text_continuity_contract_test.py",
         "tests/development_version_397_text_shadow_source_size_contract_test.py",

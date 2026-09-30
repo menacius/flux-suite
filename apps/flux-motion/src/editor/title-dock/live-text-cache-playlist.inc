@@ -599,6 +599,7 @@ void TitleDock::populate_exposed_text()
                         title->live_text_rows[row][col] = live_value;
                     if (!detach_live_text_table_cell(*title, row_id, layer->id))
                         return;
+                    refresh_active_live_text_row_without_recue(title);
                     TitleDataStore::instance().save();
                     TitleDataStore::instance().touch_runtime_change();
                     CacheManager::instance().refreshLiveCueStructureAsync(title);
@@ -610,6 +611,7 @@ void TitleDock::populate_exposed_text()
                     if (!restore_live_text_table_cell(*title, row_id, layer->id))
                         return;
                     synchronize_live_text_table_bindings(*title);
+                    refresh_active_live_text_row_without_recue(title);
                     TitleDataStore::instance().save();
                     TitleDataStore::instance().touch_runtime_change();
                     CacheManager::instance().refreshLiveCueStructureAsync(title);
@@ -620,6 +622,7 @@ void TitleDock::populate_exposed_text()
                 if (chosen == remove_action) {
                     remove_live_text_external_binding(*title, row_id, layer->id);
                     synchronize_live_text_table_bindings(*title);
+                    refresh_active_live_text_row_without_recue(title);
                     TitleDataStore::instance().save();
                     TitleDataStore::instance().notify_change();
                     populate_exposed_text();
@@ -646,6 +649,7 @@ void TitleDock::populate_exposed_text()
                                             cell.binding.field_path);
                     set_live_text_external_binding(*title, std::move(cell));
                 }
+                refresh_active_live_text_row_without_recue(title);
                 TitleDataStore::instance().save();
                 TitleDataStore::instance().notify_change();
                 populate_exposed_text();
@@ -990,9 +994,15 @@ void TitleDock::on_import_live_text_data()
     title->live_text_rows = std::move(imported_rows);
     title->live_text_row_ids.clear();
     normalize_live_text_rows(title, exposed);
-    title->current_cue_row = -1;
-    title->pending_cue_row = -1;
-    ++title->cue_revision;
+    if (title->current_cue_row >= 0)
+        title->current_cue_row = std::min(
+            title->current_cue_row,
+            static_cast<int>(title->live_text_rows.size()) - 1);
+    if (title->pending_cue_row >= 0)
+        title->pending_cue_row = std::min(
+            title->pending_cue_row,
+            static_cast<int>(title->live_text_rows.size()) - 1);
+    refresh_active_live_text_row_without_recue(title);
     TitleDataStore::instance().save();
     TitleDataStore::instance().notify_change();
     CacheManager::instance().refreshLiveCueStructure(title);
@@ -1050,6 +1060,7 @@ void TitleDock::on_toggle_external_data_source()
     auto title = TitleDataStore::instance().get_title(selected_id());
     if (!title) return;
     title->external_data_enabled = !title->external_data_enabled;
+    refresh_active_live_text_row_without_recue(title);
     TitleDataStore::instance().save();
     TitleDataStore::instance().touch_runtime_change();
     seen_store_revision_ = TitleDataStore::instance().revision();
@@ -1062,7 +1073,12 @@ void TitleDock::on_show_external_data_settings()
     if (!title)
         return;
     ExternalDataSettingsDialog dialog(title, this);
-    dialog.exec();
+    if (dialog.exec() == QDialog::Accepted) {
+        refresh_active_live_text_row_without_recue(title);
+        TitleDataStore::instance().save();
+        TitleDataStore::instance().touch_runtime_change();
+        seen_store_revision_ = TitleDataStore::instance().revision();
+    }
     update_external_data_controls();
     populate_exposed_text();
 }
@@ -1118,6 +1134,8 @@ void TitleDock::on_delete_live_text_rows()
 
     updating_exposed_text_ = true;
     int next_row = rows.front();
+    const bool had_current_cue = title->current_cue_row >= 0;
+    const bool had_pending_cue = title->pending_cue_row >= 0;
     for (auto it = rows.rbegin(); it != rows.rend(); ++it) {
         const int row = *it;
         if (row < 0 || row >= (int)title->live_text_rows.size())
@@ -1137,6 +1155,15 @@ void TitleDock::on_delete_live_text_rows()
 
     auto exposed_now = exposed_text_layers(title);
     normalize_live_text_rows(title, exposed_now);
+    if (had_current_cue && title->current_cue_row < 0 &&
+        !title->live_text_rows.empty())
+        title->current_cue_row = std::min(
+            next_row, static_cast<int>(title->live_text_rows.size()) - 1);
+    if (had_pending_cue && title->pending_cue_row < 0 &&
+        !title->live_text_rows.empty())
+        title->pending_cue_row = std::min(
+            next_row, static_cast<int>(title->live_text_rows.size()) - 1);
+    refresh_active_live_text_row_without_recue(title);
     TitleDataStore::instance().save();
     TitleDataStore::instance().notify_change();
     CacheManager::instance().refreshLiveCueStructure(title);
@@ -1338,6 +1365,7 @@ void TitleDock::on_map_external_table()
 
     if (!changed)
         return;
+    refresh_active_live_text_row_without_recue(title);
     TitleDataStore::instance().save();
     TitleDataStore::instance().touch_runtime_change();
     CacheManager::instance().refreshLiveCueStructureAsync(title);

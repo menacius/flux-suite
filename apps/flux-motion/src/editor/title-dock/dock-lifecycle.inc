@@ -8,6 +8,11 @@ TitleDock::TitleDock(QWidget *parent)
     setFeatures(QDockWidget::DockWidgetMovable |
                 QDockWidget::DockWidgetFloatable);
     build_ui();
+    /* OBS's preview canvas and several host panels intentionally use NoFocus.
+     * Clicking them therefore does not make Qt clear a focused cue editor.
+     * Observe application-wide pointer presses so a click anywhere outside the
+     * active cue field definitively ends its editing session. */
+    qApp->installEventFilter(this);
 
     const QPointer<TitleDock> command_guard(this);
     if (auto *host = fxm::editor_host::editor_host()) {
@@ -91,6 +96,7 @@ TitleDock::TitleDock(QWidget *parent)
                             continue;
                         if (!synchronize_live_text_table_bindings(*title, update.source_id))
                             continue;
+                        refresh_active_live_text_row_without_recue(title);
                         TitleDataStore::instance().touch_runtime_change();
                         CacheManager::instance().refreshLiveCueStructureAsync(title);
                         if (title->id == external_table_guard->selected_id())
@@ -286,6 +292,34 @@ void TitleDock::changeEvent(QEvent *event)
 bool TitleDock::eventFilter(QObject *watched, QEvent *event)
 {
     if (!event)
+        return QObject::eventFilter(watched, event);
+
+    if (event->type() == QEvent::MouseButtonPress) {
+        LiveTextCueField *active_field = nullptr;
+        for (QWidget *focus = QApplication::focusWidget(); focus;
+             focus = focus->parentWidget()) {
+            active_field = dynamic_cast<LiveTextCueField *>(focus);
+            if (active_field)
+                break;
+        }
+        if (active_field) {
+            QWidget *pressed_widget = qobject_cast<QWidget *>(watched);
+            const bool pressed_inside_field = pressed_widget &&
+                (pressed_widget == active_field ||
+                 active_field->isAncestorOf(pressed_widget));
+            if (!pressed_inside_field)
+                active_field->clearFocus();
+        }
+    }
+
+    QWidget *watched_widget = qobject_cast<QWidget *>(watched);
+    const bool detached_live_text_event = live_text_columns_dialog_ && watched_widget &&
+        (watched_widget == live_text_columns_dialog_ ||
+         live_text_columns_dialog_->isAncestorOf(watched_widget));
+    const bool dock_event = watched == this ||
+        (watched_widget && isAncestorOf(watched_widget)) ||
+        detached_live_text_event;
+    if (!dock_event)
         return QObject::eventFilter(watched, event);
 
     if (event->type() == QEvent::StyleChange ||
@@ -703,6 +737,7 @@ void TitleDock::adjust_live_text_table_columns(bool fill_to_viewport)
 
 TitleDock::~TitleDock()
 {
+    qApp->removeEventFilter(this);
     program_command_subscription_.reset();
     leavePreview();
     release_live_cue_preview_source();
@@ -865,21 +900,52 @@ void TitleDock::install_host_state_callbacks()
     auto *host = fxm::editor_host::editor_host();
     if (!host)
         return;
+
+    /* Source activation is a burst operation in OBS. Keep the existing
+     * leading refresh plus the 75 ms settling refresh, but coalesce each burst
+     * into one of each instead of allocating two timers for every lifecycle
+     * signal. This preserves binding/route correctness while allowing OBS's
+     * mixer and media-control updates to drain from the same Qt event queue. */
+    if (!host_state_refresh_timer_) {
+        host_state_refresh_timer_ = new QTimer(this);
+        host_state_refresh_timer_->setSingleShot(true);
+        host_state_refresh_timer_->setInterval(0);
+        connect(host_state_refresh_timer_, &QTimer::timeout, this, [this]() {
+            refresh_for_host_state_change();
+            if (host_preview_route_refresh_pending_ && isPreviewReady())
+                sync_live_cue_preview_output_route();
+            host_preview_route_refresh_pending_ = false;
+        });
+    }
+    if (!host_state_settle_timer_) {
+        host_state_settle_timer_ = new QTimer(this);
+        host_state_settle_timer_->setSingleShot(true);
+        host_state_settle_timer_->setInterval(75);
+        connect(host_state_settle_timer_, &QTimer::timeout, this, [this]() {
+            refresh_for_host_state_change();
+        });
+    }
+
     host_event_subscription_ = host->subscribe(
         [this](fxm::editor_host::HostEvent event) {
-            QTimer::singleShot(0, this, [this, event]() {
-                refresh_for_host_state_change();
-                if ((event == fxm::editor_host::HostEvent::PreviewRouteChanged ||
-                     event == fxm::editor_host::HostEvent::SceneChanged) &&
-                    isPreviewReady()) {
-                    sync_live_cue_preview_output_route();
-                }
-            });
-            if (event == fxm::editor_host::HostEvent::SourceStateChanged) {
-                QTimer::singleShot(75, this, [this]() {
-                    refresh_for_host_state_change();
-                });
-            }
+            /* libobs lifecycle signals may originate outside the Qt thread.
+             * Only the queued closure touches timers or dock state. Multiple
+             * queued closures still collapse onto the same two timers. */
+            QMetaObject::invokeMethod(
+                this,
+                [this, event]() {
+                    host_preview_route_refresh_pending_ =
+                        host_preview_route_refresh_pending_ ||
+                        event == fxm::editor_host::HostEvent::PreviewRouteChanged ||
+                        event == fxm::editor_host::HostEvent::SceneChanged;
+                    if (host_state_refresh_timer_ &&
+                        !host_state_refresh_timer_->isActive())
+                        host_state_refresh_timer_->start();
+                    if (event == fxm::editor_host::HostEvent::SourceStateChanged &&
+                        host_state_settle_timer_)
+                        host_state_settle_timer_->start();
+                },
+                Qt::QueuedConnection);
         });
 }
 
@@ -1290,6 +1356,7 @@ void TitleDock::build_ui()
                 }
             }
             if (changed) {
+                refresh_active_live_text_row_without_recue(title);
                 TitleDataStore::instance().save();
                 TitleDataStore::instance().touch_runtime_change();
                 CacheManager::instance().refreshLiveCueStructureAsync(title);

@@ -216,6 +216,15 @@ InstallEngine::Result InstallEngine::performInstall(Product product, QString app
         removeTree(stagingPath);
         return {false, QStringLiteral("Package is incomplete; missing %1").arg(product.executable)};
     }
+#if !defined(Q_OS_WIN)
+    const QFileDevice::Permissions executablePermissions = QFile::permissions(stagedExecutable)
+        | QFileDevice::ExeOwner | QFileDevice::ExeUser | QFileDevice::ExeGroup
+        | QFileDevice::ExeOther;
+    if (!QFile::setPermissions(stagedExecutable, executablePermissions)) {
+        removeTree(stagingPath);
+        return {false, QStringLiteral("Could not mark %1 as executable.").arg(product.executable)};
+    }
+#endif
 
     /* Once the replacement has been completely verified and staged, remove
      * every installation of this product outside the selected target.  This
@@ -350,6 +359,7 @@ QString InstallEngine::acquirePackage(const Product &product, const QString &app
 bool InstallEngine::extractPackage(const QString &archive, const QString &destination,
                                    QString *error)
 {
+#if defined(Q_OS_WIN)
     const QString command = QStringLiteral("$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath %1 -DestinationPath %2 -Force")
                                 .arg(shellQuote(QDir::toNativeSeparators(archive)),
                                      shellQuote(QDir::toNativeSeparators(destination)));
@@ -358,6 +368,15 @@ bool InstallEngine::extractPackage(const QString &archive, const QString &destin
     process.setArguments({QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"),
                           QStringLiteral("-NonInteractive"), QStringLiteral("-ExecutionPolicy"),
                           QStringLiteral("Bypass"), QStringLiteral("-Command"), command});
+#else
+    // Info-ZIP is available on every supported distribution and, unlike a
+    // shell command, passing arguments directly preserves spaces and prevents
+    // package paths from being interpreted as code.
+    QProcess process;
+    process.setProgram(QStringLiteral("unzip"));
+    process.setArguments({QStringLiteral("-q"), QStringLiteral("-o"), archive,
+                          QStringLiteral("-d"), destination});
+#endif
     process.start();
     while (!process.waitForFinished(200)) {
         if (m_cancelled) {
@@ -433,8 +452,14 @@ void InstallEngine::createStartMenuShortcut(const Product &product, const QStrin
     if (programs.isEmpty()) {
         return;
     }
-    const QString suiteFolder = QDir(programs).filePath(QStringLiteral("Flux Suite"));
+    const QString suiteFolder =
+#if defined(Q_OS_WIN)
+        QDir(programs).filePath(QStringLiteral("Flux Suite"));
+#else
+        programs;
+#endif
     QDir().mkpath(suiteFolder);
+#if defined(Q_OS_WIN)
     const QString shortcut = QDir(suiteFolder).filePath(product.name + QStringLiteral(".lnk"));
     const QString executable = QDir(installPath).filePath(product.executable);
     const QString script = QStringLiteral("$s=(New-Object -ComObject WScript.Shell).CreateShortcut(%1);$s.TargetPath=%2;$s.WorkingDirectory=%3;$s.Description=%4;$s.Save()")
@@ -445,14 +470,40 @@ void InstallEngine::createStartMenuShortcut(const Product &product, const QStrin
     QProcess::execute(QStringLiteral("powershell.exe"),
                       {QStringLiteral("-NoLogo"), QStringLiteral("-NoProfile"),
                        QStringLiteral("-NonInteractive"), QStringLiteral("-Command"), script});
+#else
+    const QString desktopFile = QDir(suiteFolder).filePath(product.id + QStringLiteral(".desktop"));
+    QString escapedExecutable = QDir(installPath).filePath(product.executable);
+    escapedExecutable.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+    escapedExecutable.replace(QLatin1Char('"'), QStringLiteral("\\\""));
+    escapedExecutable.replace(QLatin1Char('`'), QStringLiteral("\\`"));
+    escapedExecutable.replace(QLatin1Char('$'), QStringLiteral("\\$"));
+    QStringList mimeTypes;
+    if (product.id == QStringLiteral("motion-editor"))
+        mimeTypes = {QStringLiteral("application/vnd.omniatv.flux-motion.title+json"),
+                     QStringLiteral("application/vnd.omniatv.flux-motion.title-package"),
+                     QStringLiteral("application/vnd.omniatv.flux-motion.project+json")};
+    else if (product.id == QStringLiteral("encoder"))
+        mimeTypes = {QStringLiteral("application/vnd.omniatv.flux-encoder.queue+json")};
+    const QByteArray entry = QStringLiteral(
+        "[Desktop Entry]\nType=Application\nName=%1\nComment=%2\nExec=\"%3\" %F\n"
+        "Terminal=false\nCategories=AudioVideo;Graphics;\nMimeType=%4;\n")
+        .arg(product.name, product.tagline, escapedExecutable, mimeTypes.join(QLatin1Char(';'))).toUtf8();
+    QSaveFile output(desktopFile);
+    if (output.open(QIODevice::WriteOnly) && output.write(entry) == entry.size())
+        output.commit();
+#endif
 }
 
 void InstallEngine::removeStartMenuShortcut(const Product &product)
 {
     const QString programs = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation);
     if (programs.isEmpty()) return;
+#if defined(Q_OS_WIN)
     QFile::remove(QDir(programs).filePath(QStringLiteral("Flux Suite/")
                                          + product.name + QStringLiteral(".lnk")));
+#else
+    QFile::remove(QDir(programs).filePath(product.id + QStringLiteral(".desktop")));
+#endif
 #if defined(Q_OS_WIN)
     const QString programData = qEnvironmentVariable("ProgramData");
     if (!programData.isEmpty()) {

@@ -565,9 +565,16 @@ static uint32_t eval_effect_stroke_color(const LayerEffect &effect, double t)
            (uint32_t)eval_channel(effect.stroke_color_b, effect.effect_stroke_color & 0xFF, t);
 }
 
+static bool authored_outline_enabled(const Layer &layer, double t)
+{
+    return layer.outline_enabled && layer.stroke_fill_type != 0 &&
+        (layer.stroke_width_prop.is_animated()
+             ? layer.stroke_width_prop.evaluate(t) : layer.stroke_width) > 0.0;
+}
+
 static bool eval_outline_enabled(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
+    if (authored_outline_enabled(layer, t))
         return true;
     const auto *effect = find_layer_effect(layer, LayerEffectType::Outline);
     return effect && effect->effect_fill_type != 0 && eval_effect_enabled(*effect, t);
@@ -575,7 +582,7 @@ static bool eval_outline_enabled(const Layer &layer, double t)
 
 static uint32_t eval_outline_color(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
+    if (authored_outline_enabled(layer, t))
         return eval_stroke_color(layer, t);
     const auto *effect = find_layer_effect(layer, LayerEffectType::Outline);
     return effect ? eval_effect_color(*effect, t) : 0x00000000;
@@ -583,8 +590,17 @@ static uint32_t eval_outline_color(const Layer &layer, double t)
 
 static double eval_outline_width(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
-        return std::max(0.0f, layer.stroke_width);
+    if (authored_outline_enabled(layer, t)) {
+        double width = layer.stroke_width_prop.is_animated()
+            ? layer.stroke_width_prop.evaluate(t) : layer.stroke_width;
+        if (!layer.scale_stroke_with_shape &&
+            (layer_type_uses_shape_geometry(layer.type) ||
+             layer_type_is_image_like(layer.type))) {
+            const auto scale = layer.scale.evaluate(t);
+            width /= std::clamp(std::sqrt(std::abs(scale.x * scale.y)), 0.01, 100.0);
+        }
+        return std::clamp(width, 0.0, 512.0);
+    }
     const auto *effect = find_layer_effect(layer, LayerEffectType::Outline);
     return effect && eval_outline_enabled(layer, t)
                ? std::max(0.0, effect->size_prop.is_animated() ? effect->size_prop.evaluate(t) : (double)effect->effect_size)
@@ -593,30 +609,30 @@ static double eval_outline_width(const Layer &layer, double t)
 
 static double eval_outline_opacity(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
+    if (authored_outline_enabled(layer, t))
         return std::clamp((double)layer.outline_opacity, 0.0, 1.0);
     const auto *effect = find_layer_effect(layer, LayerEffectType::Outline);
     return effect ? std::clamp(effect->opacity_prop.is_animated() ? effect->opacity_prop.evaluate(t) : (double)effect->effect_opacity, 0.0, 1.0) : 1.0;
 }
 
-static bool eval_outline_on_front(const Layer &layer, double)
+static bool eval_outline_on_front(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
+    if (authored_outline_enabled(layer, t))
         return layer.outline_on_front;
     const auto *effect = find_layer_effect(layer, LayerEffectType::Outline);
     return effect ? effect->effect_on_front : true;
 }
 
-static int eval_outline_alignment(const Layer &layer, double)
+static int eval_outline_alignment(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
+    if (authored_outline_enabled(layer, t))
         return std::clamp(layer.outline_alignment, 0, 2);
     return 0;
 }
 
-static bool eval_outline_antialias(const Layer &layer, double)
+static bool eval_outline_antialias(const Layer &layer, double t)
 {
-    if (layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f)
+    if (authored_outline_enabled(layer, t))
         return layer.outline_antialias;
     const auto *effect = find_layer_effect(layer, LayerEffectType::Outline);
     return effect ? effect->effect_antialias : true;

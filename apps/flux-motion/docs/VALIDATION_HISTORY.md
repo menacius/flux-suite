@@ -54,13 +54,13 @@ deliveries because they included contracts pinned to Development Version 243,
 obsolete exact source tokens, unavailable `g++`, or incomplete runtime DLL
 paths. These are test-maintenance records, not current production requirements.
 
-## Current audit: v0.8.19-1-alpha, Development Version 420
+## Current audit: v0.8.20-alpha, Development Version 422
 
 - Flux Motion OBS plugin: Release compile passed.
 - Flux Motion Editor and renderer: Release compile passed.
-- Native Chart Layer runtime/data and playback-pipeline performance contracts
-  passed, including two-resolution target propagation and shared renderer checks.
-- Distribution was staged under Flux Suite `Dist`; installation was not run.
+- Scene Mask Preview/Program lifecycle, durable shortcut persistence and dock
+  control contracts passed together with the targeted native cue contracts.
+- The Release OBS plugin was compiled and installed locally.
 
 The local OBS dependency bundle still produces non-fatal Qt WebSockets
 `LNK4217` warnings. The complete historical Flux Motion suite remains

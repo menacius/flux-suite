@@ -10,13 +10,13 @@ foreach ($text in @('Update All', 'Queued to update', 'Currently updating',
 if (-not $window.Contains('card.changelog->setVisible(!product.changelog.isEmpty());')) {
     throw 'Latest changelog link must remain visible after install and update state changes.'
 }
-if ($manifest.suiteVersion -ne '2026 - v0.8.19-1-alpha') {
+if ($manifest.suiteVersion -ne '2026 - v0.8.19-3') {
     throw "Stale suite version: $($manifest.suiteVersion)"
 }
 $expectedVersions = @{
     encoder = '2026 - v0.8.18-alpha'
-    'motion-editor' = '2026 - v0.8.19-1-alpha'
-    'motion-obs' = '2026 - v0.8.19-1-alpha'
+    'motion-editor' = '2026 - v0.8.19-3'
+    'motion-obs' = '2026 - v0.8.19-3'
 }
 foreach ($product in $manifest.products) {
     if ($product.version -ne $expectedVersions[$product.id]) { throw "Stale product version: $($product.id)" }

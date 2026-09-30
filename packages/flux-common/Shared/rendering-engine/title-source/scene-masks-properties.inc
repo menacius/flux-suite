@@ -823,9 +823,11 @@ static uint32_t eval_effect_gradient_end_color(const LayerEffect &effect, double
            (uint32_t)eval_channel(effect.gradient_end_color_b, effect.effect_gradient_end_color & 0xFF, t);
 }
 
-static bool eval_outline_enabled(const Layer &layer, double)
+static bool eval_outline_enabled(const Layer &layer, double t)
 {
-    return layer.outline_enabled && layer.stroke_fill_type != 0 && layer.stroke_width > 0.0f;
+    return layer.outline_enabled && layer.stroke_fill_type != 0 &&
+           (layer.stroke_width_prop.is_animated()
+                ? layer.stroke_width_prop.evaluate(t) : layer.stroke_width) > 0.0;
 }
 
 static uint32_t eval_outline_color(const Layer &layer, double t)
@@ -833,9 +835,21 @@ static uint32_t eval_outline_color(const Layer &layer, double t)
     return eval_outline_enabled(layer, t) ? eval_stroke_color(layer, t) : 0x00000000;
 }
 
-static double eval_outline_width(const Layer &layer, double)
+static double eval_outline_width(const Layer &layer, double t)
 {
-    return eval_outline_enabled(layer, 0.0) ? std::max(0.0f, layer.stroke_width) : 0.0;
+    if (!eval_outline_enabled(layer, t))
+        return 0.0;
+    double width = std::clamp(layer.stroke_width_prop.is_animated()
+        ? layer.stroke_width_prop.evaluate(t)
+        : static_cast<double>(layer.stroke_width), 0.0, 512.0);
+    if (!layer.scale_stroke_with_shape &&
+        (layer_type_uses_shape_geometry(layer.type) ||
+         layer_type_is_image_like(layer.type))) {
+        const auto scale = layer.scale.evaluate(t);
+        const double area_scale = std::sqrt(std::abs(scale.x * scale.y));
+        width /= std::clamp(area_scale, 0.01, 100.0);
+    }
+    return std::clamp(width, 0.0, 512.0);
 }
 
 static double eval_outline_opacity(const Layer &layer, double)

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Flux Motion
+Comment=Create and render animated title graphics
+Exec=flux-motion
+Icon=flux-motion
+Terminal=false
+Categories=Graphics;AudioVideo;
+StartupNotify=true

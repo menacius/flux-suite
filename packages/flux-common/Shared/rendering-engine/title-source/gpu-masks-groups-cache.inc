@@ -143,6 +143,15 @@
      * Motion Blur exposure is still being accumulated. Nested passes use
      * isolated temporary targets instead of clearing the outer accumulation. */
     int motion_temporal_depth = 0;
+    struct AdjustmentMotionHistory {
+        std::vector<gs_texrender_t *> frames;
+        std::vector<double> times;
+        std::size_t next = 0;
+        double last_time = -1.0;
+        uint64_t model_revision = std::numeric_limits<uint64_t>::max();
+    };
+    std::unordered_map<std::string, AdjustmentMotionHistory>
+        adjustment_motion_history;
     /* Immediate readback remains for compatibility callers. Phase 14 prerender
      * uses the independent triple-buffered slots below. */
     gs_stagesurf_t *stage = nullptr;
@@ -273,6 +282,7 @@
     std::thread shader_compile_thread;
     std::deque<ShaderCompileJob> shader_compile_queue;
     std::unordered_set<std::string> shader_compile_queued_ids;
+    std::unordered_set<std::string> shader_compile_failed_ids;
     bool shader_compile_stop = false;
     bool shader_compile_active = false;
     std::string shader_compile_active_id;
@@ -383,6 +393,14 @@ static bool queue_shader_compile_job(TitleGpuRenderSession *session,
     std::lock_guard<std::mutex> lock(session->shader_compile_mutex);
     if (session->shader_compile_stop)
         return false;
+    /* A deterministic backend/compiler failure cannot become successful by
+     * queuing the identical source again on the next paint. Retain the error
+     * for this session and avoid a compile/repaint loop that can saturate the
+     * GUI thread on Linux OpenGL. A new session naturally retries after an
+     * application update or graphics-device restart. */
+    if (session->shader_compile_failed_ids.find(id) !=
+        session->shader_compile_failed_ids.end())
+        return false;
     if (session->shader_compile_active_id == id ||
         session->shader_compile_queued_ids.find(id) !=
             session->shader_compile_queued_ids.end()) {
@@ -451,6 +469,10 @@ static void shader_compile_worker_loop(TitleGpuRenderSession *session)
             session->shader_compile_active = false;
             session->shader_compile_active_id.clear();
             session->shader_compile_label.clear();
+            if (ok)
+                session->shader_compile_failed_ids.erase(job.id);
+            else
+                session->shader_compile_failed_ids.insert(job.id);
             session->shader_compile_progress_percent = shader_compile_progress_locked(session);
         }
         {
@@ -511,7 +533,7 @@ static bool ensure_session_shader_effect(
     if (current || (destination && *destination))
         return true;
     const std::string human_label = label && *label ? label : id;
-    queue_shader_compile_job(session, id, human_label,
+    const bool queued = queue_shader_compile_job(session, id, human_label,
         [session, source, filename, destination, id, human_label]() -> bool {
             gs_effect_t *compiled = gs_effect_create(source, filename, nullptr);
             std::lock_guard<std::mutex> lock(session->mutex);
@@ -532,7 +554,8 @@ static bool ensure_session_shader_effect(
             }
             return ok;
         });
-    mark_shader_compile_pending(session, human_label.c_str());
+    if (queued)
+        mark_shader_compile_pending(session, human_label.c_str());
     return false;
 }
 
@@ -567,7 +590,7 @@ static gs_effect_t *session_registry_effect_or_queue(
     gs_effect_t *compiled = session->effect_registry->find(type);
     if (compiled)
         return compiled;
-    queue_shader_compile_job(session, id, human_label,
+    const bool queued = queue_shader_compile_job(session, id, human_label,
         [session, type, human_label]() -> bool {
             std::unique_ptr<TitleEffectRegistry> *registry = nullptr;
             {
@@ -587,7 +610,8 @@ static gs_effect_t *session_registry_effect_or_queue(
             }
             return effect != nullptr;
         });
-    mark_shader_compile_pending(session, human_label.c_str());
+    if (queued)
+        mark_shader_compile_pending(session, human_label.c_str());
     return nullptr;
 }
 
@@ -605,7 +629,7 @@ static gs_effect_t *session_registry_effect_or_queue(
     gs_effect_t *compiled = session->effect_registry->find(stable_id);
     if (compiled)
         return compiled;
-    queue_shader_compile_job(session, id, human_label,
+    const bool queued = queue_shader_compile_job(session, id, human_label,
         [session, stable_id, human_label]() -> bool {
             std::unique_ptr<TitleEffectRegistry> *registry = nullptr;
             {
@@ -625,7 +649,8 @@ static gs_effect_t *session_registry_effect_or_queue(
             }
             return effect != nullptr;
         });
-    mark_shader_compile_pending(session, human_label.c_str());
+    if (queued)
+        mark_shader_compile_pending(session, human_label.c_str());
     return nullptr;
 }
 

@@ -1,4 +1,5 @@
-    double left = 8.0 + std::max(0.0f, layer.stroke_width);
+    double left = 8.0 + animated_scalar_max_nonnegative(
+        layer.stroke_width_prop, layer.stroke_width);
     double right = left;
     double top = left;
     double bottom = left;

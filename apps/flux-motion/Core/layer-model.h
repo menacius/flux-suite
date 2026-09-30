@@ -802,6 +802,7 @@ struct Layer {
     int         stroke_fill_type = 1;  /* 0=none, 1=color, 2=gradient */
     uint32_t    stroke_color  = 0xFF000000;
     float       stroke_width  = 0.0f;
+    AnimatedProperty stroke_width_prop { "stroke_width", 0.0 };
     float       stroke_offset = 0.0f; /* geometry offset of the stroke centreline */
     AnimatedProperty stroke_offset_prop { "stroke_offset", 0.0 };
     float       outline_opacity = 1.0f;

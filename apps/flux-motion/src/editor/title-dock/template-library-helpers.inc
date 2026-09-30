@@ -327,6 +327,34 @@ static void apply_live_cue_layer_value(
                                             ? target->rich_text.typing_format_mask : 0);
 }
 
+static void refresh_active_live_text_row_without_recue(
+    const std::shared_ptr<Title> &title)
+{
+    if (!title || title->current_cue_row < 0)
+        return;
+    auto exposed = exposed_text_layers(title);
+    normalize_live_text_rows(title, exposed);
+    const int cue_row = title->current_cue_row;
+    if (cue_row >= static_cast<int>(title->live_text_rows.size()))
+        return;
+    for (int col = 0; col < static_cast<int>(exposed.size()); ++col) {
+        const auto &target = exposed[col];
+        if (!target)
+            continue;
+        const int value_row = target->exposed_single_value ? 0 : cue_row;
+        if (value_row < 0 ||
+            value_row >= static_cast<int>(title->live_text_rows.size()) ||
+            col >= static_cast<int>(title->live_text_rows[value_row].size()))
+            continue;
+        apply_live_text_runtime_binding(*title, value_row, *target);
+        apply_live_cue_layer_value(
+            *title, target, cue_row,
+            effective_live_text_cue_value(
+                *title, value_row, *target,
+                title->live_text_rows[value_row][col]));
+    }
+}
+
 static QString live_cue_image_file_name(const QString &path)
 {
     const QString trimmed = path.trimmed();
@@ -994,6 +1022,10 @@ public:
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setTabChangesFocus(true);
+        /* Cue text is an operator-editable control, not a type-to-select
+         * target.  Only a direct pointer click may begin an editing session;
+         * OBS hotkeys and QTableView keyboard search must leave it untouched. */
+        setFocusPolicy(Qt::ClickFocus);
         document()->setDocumentMargin(0.0);
         setFrameShape(QFrame::NoFrame);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -1013,15 +1045,46 @@ public:
     std::function<void(bool)> focus_changed;
 
 protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        edit_focus_armed_ = true;
+        QPlainTextEdit::mousePressEvent(event);
+    }
+
     void focusInEvent(QFocusEvent *event) override
     {
+        /* A QTableView may try to transfer focus to the widget in its current
+         * cell when it receives a printable key.  A live-cue value must only
+         * become editable after an explicit pointer click or keyboard focus
+         * traversal; otherwise an operator hotkey (notably a numpad cue key)
+         * can unexpectedly overwrite the cue text. */
         QPlainTextEdit::focusInEvent(event);
+        if (!edit_focus_armed_) {
+            const QPointer<LiveTextCueField> guard(this);
+            QTimer::singleShot(0, this, [guard]() {
+                if (!guard || guard->edit_focus_armed_ || !guard->hasFocus())
+                    return;
+                QWidget *ancestor = guard->parentWidget();
+                while (ancestor &&
+                       !qobject_cast<QAbstractItemView *>(ancestor))
+                    ancestor = ancestor->parentWidget();
+                if (ancestor)
+                    ancestor->setFocus(Qt::OtherFocusReason);
+                else
+                    guard->clearFocus();
+            });
+        }
         if (focus_changed)
             focus_changed(true);
     }
 
     void keyPressEvent(QKeyEvent *event) override
     {
+        if (!edit_focus_armed_) {
+            if (event)
+                event->ignore();
+            return;
+        }
         if (event && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
             !event->modifiers().testFlag(Qt::ShiftModifier)) {
             if (editing_finished)
@@ -1037,6 +1100,7 @@ protected:
 
     void focusOutEvent(QFocusEvent *event) override
     {
+        edit_focus_armed_ = false;
         QPlainTextEdit::focusOutEvent(event);
         if (editing_finished)
             editing_finished(toPlainText());
@@ -1045,6 +1109,9 @@ protected:
             QTimer::singleShot(0, qApp, [callback]() { callback(false); });
         }
     }
+
+private:
+    bool edit_focus_armed_ = false;
 };
 
 class LiveImageCueField : public QWidget {

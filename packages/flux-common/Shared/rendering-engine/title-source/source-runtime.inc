@@ -394,6 +394,11 @@ struct TitleSourceData {
     std::chrono::steady_clock::time_point last_clock_refresh;
     bool        first_tick   = true;
     bool        waiting_for_cue = true;
+    /* OBS constructs collection sources before the collection-specific title
+     * store has necessarily finished loading. Defer title-dependent startup
+     * state instead of treating that transient miss as a real empty binding. */
+    bool        initial_title_state_pending = false;
+    bool        activation_cue_pending = false;
     bool        force_cue_state_sync = false; /* title switch/startup may race an already-issued cue */
     bool        first_frame_pending = true;   /* source is not clean until video_render draws once */
     uint32_t    consecutive_draw_failures = 0;
@@ -459,7 +464,7 @@ struct TitleSourceData {
         double y = 0.0;
         bool move_with_mask = true;
         ImageBoxMode box_mode = ImageBoxMode::FitImageToBox;
-        bool crop_when_outside_box = false;
+        bool keep_within_bounds = false;
         double anchor_x = 0.5;
         double anchor_y = 0.5;
     };
@@ -468,6 +473,7 @@ struct TitleSourceData {
     struct ActiveSceneMaskScene {
         std::string name;
         obs_source_t *source = nullptr;
+        bool active_ref = false;
     };
     bool scene_mask_foreground_active = false;
     std::vector<ActiveSceneMaskScene> active_scene_mask_scenes;
@@ -1056,7 +1062,6 @@ static bool layer_non_transform_animation_changes_during_interval(
      * transition regression fixed in Development Version 288. */
     if (text_animator_stack_is_time_dependent(layer.text_animators))
         return true;
-
     for (const LayerEffect &effect : layer.effects) {
         if (effect_animation_changes_during_interval(
                 effect, start_local_time, end_local_time))
@@ -1086,6 +1091,7 @@ static bool layer_non_transform_animation_changes_during_interval(
         &layer.stroke_color_a, &layer.stroke_color_r,
         &layer.stroke_color_g, &layer.stroke_color_b,
         &layer.stroke_offset_prop,
+        &layer.stroke_width_prop,
         &layer.background_enabled_prop,
         &layer.background_opacity_prop,
         &layer.background_padding_x_prop,
@@ -1194,7 +1200,8 @@ static bool layer_has_animation(const Layer &layer)
            layer.stroke_color_r.is_animated() ||
            layer.stroke_color_g.is_animated() ||
            layer.stroke_color_b.is_animated() ||
-           layer.stroke_offset_prop.is_animated();
+           layer.stroke_offset_prop.is_animated() ||
+           layer.stroke_width_prop.is_animated();
 }
 
 static bool include_property_bounds(const Layer &layer, const AnimatedProperty &prop,
@@ -1270,6 +1277,7 @@ static bool layer_animation_keyframe_bounds(const Layer &layer, double &first_ti
     has_bounds |= include_property_bounds(layer, layer.material_emissive_color_b, first_time, last_time);
     has_bounds |= include_property_bounds(layer, layer.material_emissive_intensity, first_time, last_time);
     has_bounds |= include_property_bounds(layer, layer.stroke_offset_prop, first_time, last_time);
+    has_bounds |= include_property_bounds(layer, layer.stroke_width_prop, first_time, last_time);
     has_bounds |= include_property_bounds(layer, layer.size, first_time, last_time);
     has_bounds |= include_property_bounds(layer, layer.origin_prop, first_time, last_time);
     has_bounds |= include_property_bounds(layer, layer.paragraph_indent_left_prop, first_time, last_time);
@@ -1376,6 +1384,53 @@ static std::string scene_mask_key(const std::string &layer_id, const char *suffi
     return std::string(PROP_SCENE_MASK_PREFIX) + encoded.constData() + "_" + suffix;
 }
 
+static double eval_box_width(const Layer &layer, double t);
+static double eval_box_height(const Layer &layer, double t);
+
+/* Keep the authored mask box fully covered by the transformed OBS scene. This
+ * is deliberately a transform constraint (not a render-time crop): scene
+ * edges may remain outside the mask but can never move inside it and expose an
+ * empty strip. Properties, the source control dialog and the dock therefore
+ * converge on the same persisted position/zoom values. */
+static bool constrain_scene_mask_config_to_box(
+    TitleSourceData::SceneMaskConfig &cfg,
+    double box_width, double box_height,
+    double scene_width, double scene_height)
+{
+    if (!cfg.keep_within_bounds || box_width <= 0.0 || box_height <= 0.0 ||
+        scene_width <= 0.0 || scene_height <= 0.0)
+        return false;
+
+    const fxm::ImageDisplaySize fitted = fxm::calculate_image_display_size(
+        cfg.box_mode, true, box_width, box_height, scene_width, scene_height);
+    if (fitted.width <= 0.0 || fitted.height <= 0.0)
+        return false;
+
+    const double previous_zoom = cfg.zoom;
+    const double previous_x = cfg.x;
+    const double previous_y = cfg.y;
+    const double minimum_zoom = std::clamp(
+        std::max(box_width / fitted.width, box_height / fitted.height),
+        0.01, 8.0);
+    cfg.zoom = std::clamp(cfg.zoom, minimum_zoom, 8.0);
+
+    const double display_width = fitted.width * cfg.zoom;
+    const double display_height = fitted.height * cfg.zoom;
+    const double anchored_x = (box_width - display_width) * cfg.anchor_x;
+    const double anchored_y = (box_height - display_height) * cfg.anchor_y;
+    const double minimum_x = box_width - display_width - anchored_x;
+    const double maximum_x = -anchored_x;
+    const double minimum_y = box_height - display_height - anchored_y;
+    const double maximum_y = -anchored_y;
+    cfg.x = std::clamp(cfg.x, std::min(minimum_x, maximum_x),
+                       std::max(minimum_x, maximum_x));
+    cfg.y = std::clamp(cfg.y, std::min(minimum_y, maximum_y),
+                       std::max(minimum_y, maximum_y));
+    return std::abs(cfg.zoom - previous_zoom) > 0.000001 ||
+           std::abs(cfg.x - previous_x) > 0.000001 ||
+           std::abs(cfg.y - previous_y) > 0.000001;
+}
+
 static void set_scene_mask_property_defaults(
     obs_data_t *settings, const std::string &title_id,
     const std::shared_ptr<Title> &resolved_title = nullptr)
@@ -1391,10 +1446,11 @@ static void set_scene_mask_property_defaults(
             obs_data_set_default_double(settings, scene_mask_key(layer->id, "zoom_percent").c_str(), 100.0);
             obs_data_set_default_double(settings, scene_mask_key(layer->id, "x").c_str(), 0.0);
             obs_data_set_default_double(settings, scene_mask_key(layer->id, "y").c_str(), 0.0);
+            obs_data_set_default_bool(settings, scene_mask_key(layer->id, "smooth_motion").c_str(), false);
+            obs_data_set_default_int(settings, scene_mask_key(layer->id, "smoothness").c_str(), 35);
             obs_data_set_default_bool(settings, scene_mask_key(layer->id, "move_with_mask").c_str(), true);
             obs_data_set_default_int(settings, scene_mask_key(layer->id, "box_mode").c_str(),
                                      (long long)ImageBoxMode::FitImageToBox);
-            obs_data_set_default_bool(settings, scene_mask_key(layer->id, "crop_when_outside_box").c_str(), false);
             obs_data_set_default_int(settings, scene_mask_key(layer->id, "box_anchor").c_str(), 4);
         }
     }
@@ -1408,6 +1464,8 @@ static void refresh_scene_mask_configs(TitleSourceData *data, obs_data_t *settin
     data->scene_masks.clear();
     auto title = source_title_snapshot(data);
     set_scene_mask_property_defaults(settings, data->title_id, title);
+    const bool clip_all_masks =
+        obs_data_get_bool(settings, PROP_SCENE_MASK_CLIP_TO_BOUNDS);
     if (title) {
         for (const auto &layer : scene_mask_layers(title)) {
             TitleSourceData::SceneMaskConfig cfg;
@@ -1418,7 +1476,6 @@ static void refresh_scene_mask_configs(TitleSourceData *data, obs_data_t *settin
             const std::string y_key = scene_mask_key(layer->id, "y");
             const std::string move_with_mask_key = scene_mask_key(layer->id, "move_with_mask");
             const std::string box_mode_key = scene_mask_key(layer->id, "box_mode");
-            const std::string crop_key = scene_mask_key(layer->id, "crop_when_outside_box");
             const std::string anchor_key = scene_mask_key(layer->id, "box_anchor");
             cfg.scene_name = obs_data_get_string(settings, scene_key.c_str());
             const double zoom_percent = obs_data_get_double(settings, zoom_key.c_str());
@@ -1441,13 +1498,33 @@ static void refresh_scene_mask_configs(TitleSourceData *data, obs_data_t *settin
                 cfg.box_mode = ImageBoxMode::FitImageToBox;
                 break;
             }
-            cfg.crop_when_outside_box =
-                obs_data_get_bool(settings, crop_key.c_str());
+            cfg.keep_within_bounds = clip_all_masks;
             const int anchor =
                 std::clamp((int)obs_data_get_int(settings, anchor_key.c_str()),
                            0, 8);
             cfg.anchor_x = (double)(anchor % 3) * 0.5;
             cfg.anchor_y = (double)(anchor / 3) * 0.5;
+            if (cfg.keep_within_bounds && !cfg.scene_name.empty()) {
+                obs_source_t *scene = obs_get_source_by_name(
+                    cfg.scene_name.c_str());
+                if (scene) {
+                    const double box_width = eval_box_width(*layer, 0.0);
+                    const double box_height = eval_box_height(*layer, 0.0);
+                    const double scene_width =
+                        static_cast<double>(obs_source_get_width(scene));
+                    const double scene_height =
+                        static_cast<double>(obs_source_get_height(scene));
+                    obs_source_release(scene);
+                    if (constrain_scene_mask_config_to_box(
+                            cfg, box_width, box_height,
+                            scene_width, scene_height)) {
+                        obs_data_set_double(settings, zoom_key.c_str(),
+                                            cfg.zoom * 100.0);
+                        obs_data_set_double(settings, x_key.c_str(), cfg.x);
+                        obs_data_set_double(settings, y_key.c_str(), cfg.y);
+                    }
+                }
+            }
             data->scene_masks.push_back(std::move(cfg));
         }
     }
@@ -1474,7 +1551,8 @@ static void release_active_scene_mask_scenes(TitleSourceData *data)
              * only drops our strong reference and lets OBS finish teardown. */
             if (!g_source_frontend_shutting_down.load(std::memory_order_acquire)) {
                 obs_source_dec_showing(active.source);
-                obs_source_dec_active(active.source);
+                if (active.active_ref)
+                    obs_source_dec_active(active.source);
             }
             obs_source_release(active.source);
             active.source = nullptr;
@@ -1521,8 +1599,10 @@ static bool scene_mask_active_scenes_match_configs(const TitleSourceData *data)
     if (configured_names.size() != data->active_scene_mask_scenes.size())
         return false;
 
+    const bool requires_active_ref = data->scene_mask_foreground_active;
     for (const auto &active : data->active_scene_mask_scenes) {
-        if (!active.source || configured_names.find(active.name) == configured_names.end())
+        if (!active.source || active.active_ref != requires_active_ref ||
+            configured_names.find(active.name) == configured_names.end())
             return false;
     }
 
@@ -1531,7 +1611,12 @@ static bool scene_mask_active_scenes_match_configs(const TitleSourceData *data)
 
 static void activate_scene_mask_scenes(TitleSourceData *data)
 {
-    if (!data || !data->scene_mask_foreground_active)
+    /* OBS Studio's Preview makes a source "showing" without making it active
+     * on Program.  Scene-mask contents still have to be acquired and rendered
+     * there, so display visibility—not Program activation—is the eligibility
+     * condition for the nested scene references. */
+    if (!data ||
+        !data->shown_on_display.load(std::memory_order_acquire))
         return;
 
     release_active_scene_mask_scenes(data);
@@ -1545,13 +1630,17 @@ static void activate_scene_mask_scenes(TitleSourceData *data)
         if (!scene)
             continue;
 
-        /* The configured scene is rendered outside a normal obs_sceneitem.
-         * Supply both lifecycle references that OBS would normally maintain
-         * for a visible scene item, otherwise nested sources can remain hidden
-         * or inactive even though obs_source_video_render() is called. */
-        obs_source_inc_active(scene);
+        /* Preview needs the scene's current frame, but must not make media
+         * sources active: doing so starts/restarts video playback before the
+         * operator takes the source to Program. Program activation supplies
+         * the active reference so each nested media source's own playback and
+         * restart settings remain authoritative. */
+        const bool active_ref = data->scene_mask_foreground_active;
+        if (active_ref)
+            obs_source_inc_active(scene);
         obs_source_inc_showing(scene);
-        data->active_scene_mask_scenes.push_back({cfg.scene_name, scene});
+        data->active_scene_mask_scenes.push_back(
+            {cfg.scene_name, scene, active_ref});
     }
 }
 
@@ -1560,7 +1649,7 @@ static void sync_scene_mask_scenes_for_cue(TitleSourceData *data, const std::sha
     if (!data)
         return;
 
-    const bool should_activate = data->scene_mask_foreground_active &&
+    const bool should_activate =
         data->shown_on_display.load(std::memory_order_acquire) &&
         data->output_visible.load(std::memory_order_acquire) &&
         title && title_has_valid_scene_mask_cue(data, *title);

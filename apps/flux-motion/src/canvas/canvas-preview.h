@@ -247,6 +247,7 @@ signals:
     void color_picker_previewed(const QColor &color);
     void color_picked(const QColor &color, bool foreground);
     void external_image_layer_requested(const QString &image_path, const QPointF &canvas_pt);
+    void external_file_import_requested(const QString &path, const QPointF &canvas_pt);
     void external_text_layer_requested(const QString &text, const QPointF &canvas_pt);
     void asset_layer_requested(const QString &asset_id, const QPointF &canvas_pt);
     void edit_asset_requested(const QString &asset_id);

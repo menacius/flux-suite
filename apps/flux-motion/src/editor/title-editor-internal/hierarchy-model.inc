@@ -146,6 +146,16 @@ static void populate_font_style_combo(QComboBox *combo, const QString &family, c
     if (!combo) return;
     QSignalBlocker blocker(combo);
     combo->clear();
+    if (combo->property("fxmLazyFontStyles").toBool() &&
+        !combo->property("fxmPopulateFontStylesNow").toBool()) {
+        combo->setProperty("fxmFontStyleFamily", family);
+        combo->setProperty("fxmFontStylePreferred", preferred);
+        const QString initial = preferred.isEmpty()
+            ? fxm_tr("OBSTitles.Regular") : preferred;
+        combo->addItem(initial, initial);
+        combo->setCurrentIndex(0);
+        return;
+    }
     QStringList styles = font_styles_for_family(family);
     for (const QString &style : styles)
         combo->addItem(style, style);
@@ -1388,6 +1398,7 @@ static std::vector<TimelinePropertyRef> timeline_properties(Layer &layer)
     const std::vector<TimelinePropertyRef> common_props {
         {&layer.opacity, nullptr},
         {&layer.stroke_offset_prop, nullptr},
+        {&layer.stroke_width_prop, nullptr},
         {nullptr, &layer.size},
         {nullptr, &layer.origin_prop},
         {&layer.paragraph_indent_left_prop, nullptr}, {&layer.paragraph_indent_right_prop, nullptr},
@@ -2220,6 +2231,7 @@ static QString property_label(const std::string &name)
         name == "fill_color_g" || name == "fill_color_b") return fxm_tr("OBSTitles.FillColor");
     if (name == "stroke_color" || name == "stroke_color_a" || name == "stroke_color_r" ||
         name == "stroke_color_g" || name == "stroke_color_b") return fxm_tr("OBSTitles.StrokeColor");
+    if (name == "stroke_width") return fxm_tr("OBSTitles.StrokeWidth");
     if (name == "shadow_color_a" || name == "shadow_color_r" ||
         name == "shadow_color_g" || name == "shadow_color_b") return fxm_tr("OBSTitles.ShadowColor");
     if (name == "background_color_a" || name == "background_color_r" ||

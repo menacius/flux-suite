@@ -53,7 +53,8 @@
 #include <obs-nix-platform.h>
 #endif
 #if defined(FXM_CANVAS_WITH_OBS) && FXM_CANVAS_WITH_OBS && \
-    defined(ENABLE_WAYLAND) && QT_VERSION < QT_VERSION_CHECK(6, 9, 0) && \
+    !defined(_WIN32) && !defined(__APPLE__) && \
+    QT_VERSION < QT_VERSION_CHECK(6, 9, 0) && \
     __has_include(<qpa/qplatformnativeinterface.h>)
 #define OBS_FXM_HAS_QPA_NATIVE_INTERFACE 1
 #include <qpa/qplatformnativeinterface.h>

@@ -248,6 +248,9 @@ private:
         host_event_subscription_;
     std::unique_ptr<fxm::editor_host::IProgramCommandSubscription>
         program_command_subscription_;
+    QTimer       *host_state_refresh_timer_ = nullptr;
+    QTimer       *host_state_settle_timer_ = nullptr;
+    bool          host_preview_route_refresh_pending_ = false;
     std::map<int, QByteArray> live_text_header_states_;
     QTimer       *live_refresh_timer_ = nullptr;
     QTimer       *playlist_timer_ = nullptr;

@@ -2098,6 +2098,105 @@ static bool resolve_gpu_motion_blur(
     return true;
 }
 
+static gs_texture_t *apply_gpu_adjustment_motion_blur(
+    TitleGpuRenderSession *session, const Layer &layer, double title_time,
+    gs_texture_t *composition)
+{
+    if (!session || !composition)
+        return composition;
+    const LayerEffect *config = layer_motion_blur_effect(layer);
+    if (!config)
+        return composition;
+    const double local_time = std::max(0.0, title_time - layer.in_time);
+    const ResolvedLayerEffect motion = resolve_gpu_layer_effect(*config, local_time);
+    if (!motion.enabled || motion.effect_opacity <= 0.0f ||
+        motion.effect_size <= 0.0f)
+        return composition;
+
+    auto &history = session->adjustment_motion_history[layer.id];
+    auto clear_history = [&]() {
+        for (gs_texrender_t *target : history.frames) {
+            if (target)
+                gs_texrender_destroy(target);
+        }
+        history = {};
+    };
+    const double frame_seconds = std::max(1.0 / 240.0,
+                                          source_frame_duration());
+    if (history.model_revision != session->model_revision ||
+        (history.last_time >= 0.0 &&
+         (title_time + 1e-6 < history.last_time ||
+          title_time - history.last_time > std::max(0.25, frame_seconds * 4.0))))
+        clear_history();
+    history.model_revision = session->model_revision;
+
+    const double shutter_seconds = frame_seconds *
+        std::clamp(static_cast<double>(motion.effect_size), 0.0, 720.0) /
+        360.0;
+    const double history_span = std::max(
+        frame_seconds, shutter_seconds * (motion.effect_centered ? 0.5 : 1.0));
+    std::vector<gs_texture_t *> samples;
+    samples.reserve(history.frames.size() + 1);
+    samples.push_back(composition);
+    for (std::size_t i = 0; i < history.frames.size(); ++i) {
+        if (!history.frames[i] || i >= history.times.size())
+            continue;
+        const double age = title_time - history.times[i];
+        if (age > 1e-6 && age <= history_span + frame_seconds * 0.55) {
+            if (gs_texture_t *texture = gs_texrender_get_texture(history.frames[i]))
+                samples.push_back(texture);
+        }
+    }
+
+    gs_texture_t *result = composition;
+    if (samples.size() > 1) {
+        struct vec4 clear;
+        vec4_zero(&clear);
+        bool ok = begin_gpu_target(session->motion_accum_target,
+                                   session->width, session->height, clear);
+        if (ok) {
+            gs_texrender_end(session->motion_accum_target);
+            const float weight = 1.0f / static_cast<float>(samples.size());
+            for (gs_texture_t *sample : samples) {
+                if (!append_gpu_temporal_sample(
+                        session, sample, weight,
+                        session->motion_accum_target)) {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        gs_texture_t *exposure = ok
+            ? gs_texrender_get_texture(session->motion_accum_target) : nullptr;
+        if (exposure && resolve_gpu_motion_blur(
+                session, exposure, composition,
+                std::clamp(motion.effect_opacity, 0.0f, 1.0f),
+                session->motion_sample_target))
+            result = gs_texrender_get_texture(session->motion_sample_target);
+    }
+
+    if (history.last_time < 0.0 || title_time > history.last_time + 1e-6) {
+        const int history_cap = std::clamp(
+            motion.effect_samples, 2,
+            title_gpu_render_session_is_realtime_output(session) ? 6 : 12);
+        std::size_t slot = history.frames.size();
+        if (slot < static_cast<std::size_t>(history_cap)) {
+            history.frames.push_back(gs_texrender_create(GS_BGRA, GS_ZS_NONE));
+            history.times.push_back(-1.0);
+        } else {
+            slot = history.next % history.frames.size();
+        }
+        if (slot < history.frames.size() && history.frames[slot] &&
+            copy_full_canvas_gpu_texture(
+                session, composition, history.frames[slot])) {
+            history.times[slot] = title_time;
+            history.next = (slot + 1) % history.frames.size();
+            history.last_time = title_time;
+        }
+    }
+    return result;
+}
+
 static int gpu_motion_blur_realtime_sample_cap(
     const TitleGpuRenderSession *session, bool complete_temporal_pipeline,
     bool requires_cpu_raster = false)
@@ -2289,6 +2388,26 @@ static bool render_gpu_layer_to_target(TitleGpuRenderSession *session,
                     }),
                 temporal_probe.text_animators.animators.end());
         }
+        /* Box-size animation is drawn by draw_gpu_layer_texture at each
+         * shutter time. A proportional outline can travel with that texture;
+         * a fixed-width outline still needs a new raster per sample. */
+        const bool plain_rect =
+            (temporal_probe.type == LayerType::SolidRect ||
+             temporal_probe.type == LayerType::ColorSolid ||
+             (temporal_probe.type == LayerType::Shape &&
+              temporal_probe.shape_type == ShapeType::Rectangle)) &&
+            temporal_probe.fill_type == 1;
+        if ((layer_type_is_image_like(temporal_probe.type) || plain_rect) &&
+            (!temporal_probe.outline_enabled ||
+             temporal_probe.scale_stroke_with_shape) &&
+            !temporal_probe.image_crop_when_outside_box &&
+            temporal_probe.corner_radius_tl <= 0.0f &&
+            temporal_probe.corner_radius_tr <= 0.0f &&
+            temporal_probe.corner_radius_br <= 0.0f &&
+            temporal_probe.corner_radius_bl <= 0.0f &&
+            temporal_probe.effects.empty()) {
+            temporal_probe.size.keyframes.clear();
+        }
         const double temporal_resolved_start = gpu_layer_render_time(
             title, temporal_probe, start);
         const double temporal_resolved_end = gpu_layer_render_time(
@@ -2343,17 +2462,13 @@ static bool render_gpu_layer_to_target(TitleGpuRenderSession *session,
              * transform draws. Restore distance-adaptive density here while the
              * expensive temporal branch below keeps its separate budget. */
             int sample_cap = projected_motion
-                ? (image_or_video_motion ? 96 : 48)
+                ? (image_or_video_motion ? 64 : 48)
                 : (image_or_video_motion ? 64 : 40);
             sample_cap = std::min(
                 sample_cap,
                 gpu_motion_blur_realtime_sample_cap(session, false, false));
-            if (session->editor_draft)
-                sample_cap = std::min(sample_cap, 24);
             sample_cap = std::max(2, sample_cap);
-            const double density = projected_motion
-                ? (image_or_video_motion ? 1.25 : 0.90)
-                : (image_or_video_motion ? 0.95 : 0.80);
+            const double density = image_or_video_motion ? 1.50 : 1.00;
 
             use_transform_motion_fast_path = true;
             motion_shutter_start = start;

@@ -46,7 +46,7 @@ MotionBlurSamplingPlan makeMotionBlurSamplingPlan(
         return plan;
     }
 
-    int cap = request.imageLike ? 96 : 48;
+    int cap = request.imageLike ? 64 : 48;
     if (request.realtime)
         cap = std::min(cap, realtimeCap(request));
     plan.sampleCap = std::max(2, cap);
@@ -56,10 +56,10 @@ MotionBlurSamplingPlan makeMotionBlurSamplingPlan(
      * 1.5 samples/pixel to prevent separated silhouettes. The former 2.25
      * image density generated 50% more full-canvas draws with no resolvable
      * coverage improvement at output resolution. */
-    /* Match the resident-GPU transform path: bilinear/SDF vector coverage is
-     * continuous at 0.8 samples per pixel, while sharp bitmap silhouettes use
-     * the denser 1.5 sample policy. */
-    const double density = request.imageLike ? 1.5 : 0.8;
+    /* Match the Broadcast Graphics Live exposure density. Vector/SDF artwork
+     * receives one sample per travelled pixel and sharp bitmap/video edges use
+     * 1.5 samples per pixel, in both editor and output paths. */
+    const double density = request.imageLike ? 1.5 : 1.0;
     const int count = motionBlurQualitySampleCount(request.configuredSamples,
         request.travelPixels, density, plan.sampleCap);
 

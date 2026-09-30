@@ -12,6 +12,7 @@
 #endif
 #if FXM_OBS_PLUGIN_WITH_DOCK
 #include "title-dock.h"
+#include "scene-mask-dock.h"
 #include "title-assets.h"
 #include "obs-title-preview-renderer.h"
 #include "obs-editor-host.h"
@@ -65,7 +66,9 @@ static bool g_frontend_ready = false;
 static bool g_frontend_exiting = false;
 #if FXM_OBS_PLUGIN_WITH_DOCK
 static TitleDock *g_dock = nullptr;
+static SceneMaskDock *g_scene_mask_dock = nullptr;
 static QAction *g_dock_menu_action = nullptr;
+static QAction *g_scene_mask_dock_menu_action = nullptr;
 constexpr int kObsDockLayoutStateVersion = 1;
 constexpr const char *kObsDockLayoutSettingsGroup = "ObsDockLayout";
 constexpr const char *kObsMainWindowStateKey = "mainWindowState";
@@ -78,7 +81,7 @@ static void open_preferences_from_tools_menu(void *)
 
 static void save_obs_dock_layout(QMainWindow *main)
 {
-    if (!main || !g_dock)
+    if (!main || (!g_dock && !g_scene_mask_dock))
         return;
 
     QSettings settings(QStringLiteral("FluxMotion"), QStringLiteral("Dock"));
@@ -91,7 +94,7 @@ static void save_obs_dock_layout(QMainWindow *main)
 
 static void restore_obs_dock_layout(QMainWindow *main)
 {
-    if (!main || !g_dock)
+    if (!main || (!g_dock && !g_scene_mask_dock))
         return;
 
     QSettings settings(QStringLiteral("FluxMotion"), QStringLiteral("Dock"));
@@ -130,12 +133,28 @@ static void destroy_dock_ui(bool frontend_api_available = true)
         g_dock_menu_action = nullptr;
     }
 
+    if (g_scene_mask_dock_menu_action) {
+        QObject::disconnect(g_scene_mask_dock_menu_action, nullptr, nullptr, nullptr);
+        if (QWidget *owner = qobject_cast<QWidget *>(
+                g_scene_mask_dock_menu_action->parent()))
+            owner->removeAction(g_scene_mask_dock_menu_action);
+        delete g_scene_mask_dock_menu_action;
+        g_scene_mask_dock_menu_action = nullptr;
+    }
+
     if (g_dock) {
         QObject::disconnect(g_dock, nullptr, nullptr, nullptr);
         if (frontend_api_available)
             obs_frontend_remove_dock("flux-motion-dock");
         delete g_dock;
         g_dock = nullptr;
+    }
+    if (g_scene_mask_dock) {
+        QObject::disconnect(g_scene_mask_dock, nullptr, nullptr, nullptr);
+        if (frontend_api_available)
+            obs_frontend_remove_dock("flux-motion-scene-masks-dock");
+        delete g_scene_mask_dock;
+        g_scene_mask_dock = nullptr;
     }
 }
 
@@ -156,6 +175,27 @@ static void add_docks_menu_entry(QMainWindow *main)
                          QSignalBlocker blocker(g_dock_menu_action);
                          g_dock_menu_action->setChecked(visible);
                      });
+
+    if (!g_scene_mask_dock || g_scene_mask_dock_menu_action)
+        return;
+    g_scene_mask_dock_menu_action = docks_menu->addAction(
+        fxm_brand_icon(), QStringLiteral("Flux Motion — Scene Masks"));
+    g_scene_mask_dock_menu_action->setObjectName(
+        "flux-motion-scene-masks-docks-menu-action");
+    g_scene_mask_dock_menu_action->setCheckable(true);
+    g_scene_mask_dock_menu_action->setChecked(g_scene_mask_dock->isVisible());
+    QObject::connect(g_scene_mask_dock_menu_action, &QAction::triggered,
+                     g_scene_mask_dock, [](bool visible) {
+                         if (g_scene_mask_dock)
+                             g_scene_mask_dock->setVisible(visible);
+                     });
+    QObject::connect(g_scene_mask_dock, &QDockWidget::visibilityChanged,
+                     g_scene_mask_dock_menu_action, [](bool visible) {
+                         if (!g_scene_mask_dock_menu_action)
+                             return;
+                         QSignalBlocker blocker(g_scene_mask_dock_menu_action);
+                         g_scene_mask_dock_menu_action->setChecked(visible);
+                     });
 }
 #endif
 
@@ -173,6 +213,8 @@ bool obs_module_load(void)
 #if FXM_OBS_PLUGIN_WITH_DOCK
     fxm::editor_host::set_editor_host(
         &fxm::obs_plugin::obs_editor_host());
+    title_source_set_scene_mask_controls_opener(
+        &open_scene_mask_source_controls);
     TimecodeSpinBox::set_frame_rate_provider(
         &fxm::obs_plugin::obs_frame_rate_provider());
     fxm::rendering::set_title_preview_renderer(
@@ -216,8 +258,10 @@ bool obs_module_load(void)
     FXM_LOG_INFO("Plugin", QStringLiteral("Loading plugin %1").arg(QStringLiteral(FXM_BUILD_DISPLAY)));
     FxmEffectExtensionCatalog::instance().reload();
 
-    /* 1. Initialise persistent title store */
-    TitleDataStore::instance().load();
+    /* OBS has not selected its scene collection yet. Loading here may scan an
+     * unrelated store and blocks module initialization on first launch. The
+     * FINISHED_LOADING handler restores the active collection; source ticks
+     * tolerate the intervening deferred state. */
 
     /* 2. Register the renderable source type and title cue hotkeys */
     title_source_register();
@@ -253,6 +297,7 @@ void obs_module_unload(void)
         obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 #if FXM_OBS_PLUGIN_WITH_DOCK
     destroy_dock_ui(!g_frontend_exiting);
+    title_source_set_scene_mask_controls_opener(nullptr);
     fxm::rendering::set_title_preview_renderer(nullptr);
     fxm::editor_host::set_editor_host(nullptr);
 #endif
@@ -295,7 +340,7 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
         QMainWindow *main =
             static_cast<QMainWindow *>(obs_frontend_get_main_window());
 
-        if (g_dock)
+        if (g_dock || g_scene_mask_dock)
             destroy_dock_ui();
 
         g_dock = new TitleDock(main);
@@ -306,12 +351,28 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
         g_dock->setWindowTitle(fxm_tr("OBSTitles.DockName") + QStringLiteral(" — ") + QStringLiteral(FXM_BUILD_DISPLAY));
 
         obs_frontend_add_custom_qdock("flux-motion-dock", g_dock);
-        QTimer::singleShot(0, g_dock, [main]() { restore_obs_dock_layout(main); });
+        g_scene_mask_dock = new SceneMaskDock(main);
+        QObject::connect(g_scene_mask_dock, &QObject::destroyed, []() {
+            g_scene_mask_dock = nullptr;
+        });
+        obs_frontend_add_custom_qdock("flux-motion-scene-masks-dock",
+                                      g_scene_mask_dock);
+        QTimer::singleShot(0, g_dock,
+                           [main]() { restore_obs_dock_layout(main); });
         QObject::connect(g_dock, &QDockWidget::topLevelChanged, g_dock,
                          [main]() { save_obs_dock_layout(main); });
         QObject::connect(g_dock, &QDockWidget::dockLocationChanged, g_dock,
                          [main]() { save_obs_dock_layout(main); });
         QObject::connect(g_dock, &QDockWidget::visibilityChanged, g_dock,
+                         [main]() { save_obs_dock_layout(main); });
+        QObject::connect(g_scene_mask_dock, &QDockWidget::topLevelChanged,
+                         g_scene_mask_dock,
+                         [main]() { save_obs_dock_layout(main); });
+        QObject::connect(g_scene_mask_dock, &QDockWidget::dockLocationChanged,
+                         g_scene_mask_dock,
+                         [main]() { save_obs_dock_layout(main); });
+        QObject::connect(g_scene_mask_dock, &QDockWidget::visibilityChanged,
+                         g_scene_mask_dock,
                          [main]() { save_obs_dock_layout(main); });
         add_docks_menu_entry(main);
 #endif

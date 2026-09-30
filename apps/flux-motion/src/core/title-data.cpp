@@ -18,6 +18,7 @@
 #include "text-animator-presets.h"
 #include "host-context-provider.h"
 #include "logger.h"
+#include "utf8-filesystem.h"
 
 #include <QSaveFile>
 #include <QString>
@@ -828,7 +829,7 @@ static ExternalDataSourceDefinition external_source_from_json(const json &j)
 
 static bool file_exists(const std::string &path)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fxm::filesystem_path_from_utf8(path), std::ios::binary);
     return f.is_open();
 }
 
@@ -899,7 +900,7 @@ static std::string mime_type_for_file_name(const std::string &file_name)
 
 static bool read_binary_file(const std::string &path, std::string &out, std::streamoff max_bytes, std::string *error)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fxm::filesystem_path_from_utf8(path), std::ios::binary);
     if (!f.is_open()) {
         if (error) *error = "Could not open asset file: " + path;
         return false;
@@ -1062,7 +1063,7 @@ static bool restore_embedded_image_asset(const json &j, std::string &image_path)
 
 static bool read_json_file(const std::string &path, json &out, std::string *error)
 {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(fxm::filesystem_path_from_utf8(path), std::ios::binary);
     if (!f.is_open()) {
         if (error) *error = "Could not open the file.";
         return false;
@@ -3822,6 +3823,7 @@ static json layer_to_json(const Layer &l, bool include_embedded_assets = true,
     j["stroke_fill_type"] = l.stroke_fill_type;
     j["stroke_color"]  = l.stroke_color;
     j["stroke_width"]  = l.stroke_width;
+    j["stroke_width_prop"] = aprop_to_json(l.stroke_width_prop);
     j["stroke_offset"] = l.stroke_offset;
     j["stroke_offset_prop"] = aprop_to_json(l.stroke_offset_prop);
     j["outline_opacity"] = l.outline_opacity;
@@ -5174,6 +5176,10 @@ static std::shared_ptr<Layer> layer_from_json(const json &j, bool require_embedd
     l->stroke_fill_type = std::clamp(json_int(j, "stroke_fill_type", 1), 0, 2);
     l->stroke_color  = json_color(j, "stroke_color", (uint32_t)0xFF000000);
     l->stroke_width  = std::clamp(finite_or(json_double(j, "stroke_width", 0.0), 0.0), 0.0, 512.0);
+    l->stroke_width_prop.static_value = l->stroke_width;
+    if (j.contains("stroke_width_prop"))
+        l->stroke_width_prop = aprop_from_json(j["stroke_width_prop"], "stroke_width");
+    l->stroke_width_prop.static_value = std::clamp(l->stroke_width_prop.static_value, 0.0, 512.0);
     const bool has_general_stroke_offset = j.contains("stroke_offset") ||
                                            j.contains("stroke_offset_prop");
     l->stroke_offset = (float)std::clamp(

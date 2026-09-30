@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(flux-suite-installer VERSION 0.8.19 LANGUAGES CXX)
+project(flux-suite-installer VERSION 0.8.20 LANGUAGES CXX)
 
 if(NOT DEFINED FLUX_REPOSITORY_ROOT)
     get_filename_component(FLUX_REPOSITORY_ROOT
@@ -37,7 +37,7 @@ qt_add_executable(flux-suite-installer WIN32
     src/installerwindow.h
     src/installerwindow.cpp
     resources/resources.qrc
-    resources/flux-installer.rc
+    $<$<PLATFORM_ID:Windows>:${CMAKE_CURRENT_SOURCE_DIR}/resources/flux-installer.rc>
 )
 
 target_link_libraries(flux-suite-installer PRIVATE
@@ -50,6 +50,9 @@ target_link_libraries(flux-suite-installer PRIVATE
 
 if(WIN32)
     target_link_libraries(flux-suite-installer PRIVATE bcrypt advapi32 shell32)
+else()
+    find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+    target_link_libraries(flux-suite-installer PRIVATE OpenSSL::Crypto)
 endif()
 
 target_compile_definitions(flux-suite-installer PRIVATE
@@ -62,8 +65,11 @@ if(MSVC)
 endif()
 
 set_target_properties(flux-suite-installer PROPERTIES
-    OUTPUT_NAME "Flux Suite"
+    OUTPUT_NAME "$<IF:$<PLATFORM_ID:Windows>,Flux Suite,flux-suite>"
 )
+
+include(GNUInstallDirs)
+install(TARGETS flux-suite-installer RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 include(CTest)
 if(BUILD_TESTING)
@@ -74,4 +80,11 @@ if(BUILD_TESTING)
         COMMAND flux-suite-installer --verify-feed
                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/signed-feed.json"
     )
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_test(NAME linux-window-behavior
+            COMMAND flux-suite-installer --validate-window-behavior
+        )
+        set_tests_properties(linux-window-behavior PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    endif()
 endif()

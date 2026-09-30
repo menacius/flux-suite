@@ -3281,8 +3281,9 @@ void TimelineWidget::mousePressEvent(QMouseEvent *ev)
                                   ? static_cast<int>(graph_mode_for_component(rows[row].property_channel)) : 3);
         if (rows[row].layer && title_->find_layer(rows[row].owner_id))
             select_layer_from_mouse(rows[row].owner_id, ev->modifiers());
-        ev->accept();
-        return;
+        /* An empty property row is also a valid start for a marquee spanning
+         * other layers. Keep the graph property selected, then fall through to
+         * the common marquee path below. */
     }
     if (row >= 0 && row < (int)rows.size() && !rows[row].is_property) {
         if (rows[row].is_camera || rows[row].is_camera_switch ||
@@ -3343,7 +3344,9 @@ void TimelineWidget::mousePressEvent(QMouseEvent *ev)
 
     if (ev->button() == Qt::LeftButton && ev->pos().y() >= ruler_height()) {
         clear_transition_selection();
-        if (!selected_layer_ids_.empty()) {
+        const bool property_row = row >= 0 && row < (int)rows.size() &&
+                                  rows[row].is_property;
+        if (!property_row && !selected_layer_ids_.empty()) {
             set_selected_layers({});
             emit layers_selected({});
         }

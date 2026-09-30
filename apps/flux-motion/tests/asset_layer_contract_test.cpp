@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     ok &= require(locale, "OBSTitles.SaveBeforeEditAssetPrompt=", "asset switch save prompt");
     ok &= require(locale, "OBSTitles.AssetPauseFor=", "Pause for label");
     ok &= require(locale, "OBSTitles.AssetLoopTimesSuffix=", "Loop times suffix");
-    ok &= require(cmake, "VERSION 0.8.11", "v0.8.11 project version");
+    ok &= require(cmake, "VERSION 0.8.20", "current project version");
     ok &= require(cmake, "OBS_FXM_DEVELOPMENT_VERSION", "development version variable");
     return ok ? 0 : 1;
 }
