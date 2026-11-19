@@ -324,6 +324,14 @@ void CanvasPreview::mouseMoveEvent(QMouseEvent *ev)
 
 
 
+static bool external_canvas_file_maybe_importable(const QString &path)
+{
+    /* The editor's unified dispatcher asks Qt and FFmpeg what they can decode.
+     * Accept real local files here instead of duplicating a format allow-list;
+     * this keeps drag/drop and paste in sync with newly installed decoders. */
+    return !path.trimmed().isEmpty() && QFileInfo(path).isFile();
+}
+
 bool CanvasPreview::mime_has_external_canvas_content(const QMimeData *mime) const
 {
     if (!mime)
@@ -336,9 +344,7 @@ bool CanvasPreview::mime_has_external_canvas_content(const QMimeData *mime) cons
         for (const QUrl &url : mime->urls()) {
             if (!url.isLocalFile())
                 continue;
-            const QString path = url.toLocalFile();
-            QImageReader reader(path);
-            if (reader.canRead())
+            if (external_canvas_file_maybe_importable(url.toLocalFile()))
                 return true;
         }
     }
@@ -359,17 +365,19 @@ bool CanvasPreview::handle_external_canvas_mime(const QMimeData *mime, const QPo
         }
     }
 
+    bool imported_files = false;
     if (mime->hasUrls()) {
         for (const QUrl &url : mime->urls()) {
             if (!url.isLocalFile())
                 continue;
             const QString path = url.toLocalFile();
-            QImageReader reader(path);
-            if (!reader.canRead())
+            if (!external_canvas_file_maybe_importable(path))
                 continue;
-            emit external_image_layer_requested(path, canvas_pt);
-            return true;
+            emit external_file_import_requested(path, canvas_pt);
+            imported_files = true;
         }
+        if (imported_files)
+            return true;
     }
 
     if (mime->hasImage()) {

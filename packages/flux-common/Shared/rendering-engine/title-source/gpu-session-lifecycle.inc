@@ -1054,8 +1054,10 @@ static gs_texture_t *render_gpu_group_graph_texture(
         } else if (child.type == LayerType::Adjustment) {
             gs_texture_t *coverage = render_gpu_adjustment_coverage(
                 session, title, child, title_time);
+            gs_texture_t *motion_adjusted = apply_gpu_adjustment_motion_blur(
+                session, child, title_time, frame);
             gs_texture_t *adjusted = apply_gpu_layer_effect_stack(
-                session, child, child_time, frame, session->width,
+                session, child, child_time, motion_adjusted, session->width,
                 session->height, nullptr, false, frame, true);
             gs_texrender_t *next = current_ping ? pong : ping;
             gs_texture_t *mixed = coverage && adjusted

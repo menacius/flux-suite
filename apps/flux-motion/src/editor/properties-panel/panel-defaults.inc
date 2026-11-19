@@ -312,6 +312,8 @@ void PropertiesPanel::reset_panel_defaults(const QString &panel_key)
             layer_->fill_color = defaults.fill_color;
             layer_->stroke_color = defaults.stroke_color;
             layer_->stroke_width = defaults.stroke_width;
+            set_animated_value(layer_->stroke_width_prop, t,
+                               defaults.stroke_width);
             set_animated_value(layer_->fill_color_a, t,
                                defaults.fill_color_a.evaluate(0.0));
             set_animated_value(layer_->fill_color_r, t,

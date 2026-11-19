@@ -192,6 +192,34 @@ void TitleEditor::load_editor_layout()
         restored = restoreState(window_state);
     }
 
+    if (!restored) {
+        saved_editor_dock_widths_ = {
+            {QStringLiteral("FluxMotion3DSceneDock"), 712},
+            {QStringLiteral("FluxMotionEditorAudioDock"), 96},
+            {QStringLiteral("FluxMotionEffectsDock"), 260},
+            {QStringLiteral("FluxMotionEffectsPresetsDock"), 260},
+            {QStringLiteral("FluxMotionGraphicPropertiesDock"), 389},
+            {QStringLiteral("FluxMotionLayerPropertiesDock"), 471},
+            {QStringLiteral("FluxMotionPrerenderDock"), 260},
+            {QStringLiteral("FluxMotionStylesDock"), 319},
+            {QStringLiteral("FluxMotionTimelineDock"), 2460},
+            {QStringLiteral("FluxMotionToolsDock"), 47}};
+        saved_editor_dock_heights_ = {
+            {QStringLiteral("FluxMotion3DSceneDock"), 70},
+            {QStringLiteral("FluxMotionEditorAudioDock"), 545},
+            {QStringLiteral("FluxMotionEffectsDock"), 159},
+            {QStringLiteral("FluxMotionEffectsPresetsDock"), 398},
+            {QStringLiteral("FluxMotionGraphicPropertiesDock"), 496},
+            {QStringLiteral("FluxMotionLayerPropertiesDock"), 544},
+            {QStringLiteral("FluxMotionPrerenderDock"), 160},
+            {QStringLiteral("FluxMotionStylesDock"), 470},
+            {QStringLiteral("FluxMotionTimelineDock"), 545},
+            {QStringLiteral("FluxMotionToolsDock"), 777}};
+        panels_locked_ = true;
+        restored = restoreState(QByteArray::fromBase64(
+            QByteArray(kDefaultEditorWindowStateBase64)));
+    }
+
     settings.endGroup();
 
     /* Apply the requested Flux Motion workspace on first launch,
@@ -674,6 +702,7 @@ std::shared_ptr<Layer> TitleEditor::create_basic_layer(LayerType type, const QSt
         l->fill_type = 0;
         l->outline_enabled = false;
         l->stroke_width = 0.0f;
+        l->stroke_width_prop.static_value = 0.0;
     }
     if (type == LayerType::Chart) {
         l->chart_data_mode = ChartDataMode::StaticData;

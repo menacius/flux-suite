@@ -1,5 +1,19 @@
 # Flux Motion Plugin for OBS
 
+OBS Studio 33.0.1 is the current Windows compatibility target. Extension image
+textures use Qt decoding and the stable OBS graphics API, avoiding the image-file
+ABI removed in OBS 33. Build with the Qt version supplied by the OBS SDK.
+
+Install the Windows package under `C:\ProgramData\obs-studio\plugins\flux-motion`:
+`flux-motion.dll` and its runtime DLLs belong directly in that folder, next to
+`data`. For portable OBS, use `<OBS root>\plugins\flux-motion` instead.
+The former `bin\64bit` layout is legacy in OBS 33.
+See [OBS plugin layout guidance](https://obsproject.com/kb/legacy-plugin-developer-info).
+
+See [Cue automation](CUE-AUTOMATION.md) for source Cue/Uncue buttons,
+Advanced Scene Switcher integration, automatic outro completion before scene
+transitions and the public OBS procedure API.
+
 This source root owns OBS-specific integration: module/frontend lifecycle,
 sources, transitions, rendering, texture presentation, audio, hotkeys, and the
 OBS implementations of Shared host interfaces.

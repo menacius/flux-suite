@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Flux Suite Installer
+Comment=Install and update Flux Suite applications
+Exec=flux-suite
+Icon=flux-suite
+Terminal=false
+Categories=Graphics;Utility;
+StartupNotify=true

@@ -14,6 +14,21 @@
       "binaryDir": "${sourceDir}/out/build/${presetName}"
     },
     {
+      "name": "base-linux",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "motion-windows",
       "inherits": "base-windows",
       "cacheVariables": {
@@ -33,11 +48,53 @@
       "cacheVariables": {
         "FLUX_BUILD_INSTALLER": "ON"
       }
+    },
+    {
+      "name": "motion-linux",
+      "inherits": "base-linux",
+      "cacheVariables": {
+        "FLUX_BUILD_MOTION": "ON"
+      }
+    },
+    {
+      "name": "encoder-linux",
+      "inherits": "base-linux",
+      "cacheVariables": {
+        "FLUX_BUILD_ENCODER": "ON"
+      }
+    },
+    {
+      "name": "installer-linux",
+      "inherits": "base-linux",
+      "cacheVariables": {
+        "FLUX_BUILD_INSTALLER": "ON"
+      }
+    },
+    {
+      "name": "suite-linux",
+      "inherits": "base-linux",
+      "cacheVariables": {
+        "FLUX_BUILD_MOTION": "ON",
+        "FLUX_BUILD_ENCODER": "ON",
+        "FLUX_BUILD_INSTALLER": "ON"
+      }
     }
   ],
   "buildPresets": [
     { "name": "motion-windows", "configurePreset": "motion-windows", "configuration": "RelWithDebInfo" },
     { "name": "encoder-windows", "configurePreset": "encoder-windows", "configuration": "RelWithDebInfo" },
-    { "name": "installer-windows", "configurePreset": "installer-windows", "configuration": "RelWithDebInfo" }
+    { "name": "installer-windows", "configurePreset": "installer-windows", "configuration": "RelWithDebInfo" },
+    { "name": "motion-linux", "configurePreset": "motion-linux" },
+    { "name": "encoder-linux", "configurePreset": "encoder-linux" },
+    { "name": "installer-linux", "configurePreset": "installer-linux" },
+    { "name": "suite-linux", "configurePreset": "suite-linux" }
+  ],
+  "testPresets": [
+    {
+      "name": "suite-linux",
+      "configurePreset": "suite-linux",
+      "environment": { "QT_QPA_PLATFORM": "offscreen" },
+      "output": { "outputOnFailure": true }
+    }
   ]
 }

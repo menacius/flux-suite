@@ -1616,7 +1616,9 @@ struct PsdRecord {
 static ImportedDocument read_psd(const QString &path)
 {
     ImportedDocument doc; QFile file(path);
-    if(!file.open(QIODevice::ReadOnly)){doc.error=file.errorString();return doc;} const QByteArray data=file.readAll(); BeReader r(data);
+    if(!file.open(QIODevice::ReadOnly)){doc.error=file.errorString();return doc;}
+    if(file.size()>512ll*1024ll*1024ll){doc.error=fxm_tr("OBSTitles.ImportDocumentTooLarge");return doc;}
+    const QByteArray data=file.readAll(); BeReader r(data);
     if(r.bytes(4)!="8BPS"||r.u16()!=1){doc.error=fxm_tr("OBSTitles.ImportInvalidPsd");return doc;}
     r.skip(6); const int channel_count=r.u16(); const int height=int(r.u32()), width=int(r.u32()); const int depth=r.u16(), color_mode=r.u16();
     if(width<=0||height<=0||width>30000||height>30000||quint64(width)*quint64(height)>100000000ULL){doc.error=fxm_tr("OBSTitles.ImportDocumentTooLarge");return doc;}
@@ -1702,7 +1704,7 @@ static EffectBlendMode xcf_blend(int mode)
 
 static ImportedDocument read_xcf(const QString &path)
 {
-    ImportedDocument doc;QFile file(path);if(!file.open(QIODevice::ReadOnly)){doc.error=file.errorString();return doc;}const QByteArray data=file.readAll();BeReader r(data);
+    ImportedDocument doc;QFile file(path);if(!file.open(QIODevice::ReadOnly)){doc.error=file.errorString();return doc;}if(file.size()>512ll*1024ll*1024ll){doc.error=fxm_tr("OBSTitles.ImportDocumentTooLarge");return doc;}const QByteArray data=file.readAll();BeReader r(data);
     const QByteArray header=r.bytes(14);if(!header.startsWith("gimp xcf ")){doc.error=fxm_tr("OBSTitles.ImportInvalidXcf");return doc;}
     int version=0;const QRegularExpressionMatch vm=QRegularExpression(QStringLiteral("v(\\d+)"),QRegularExpression::CaseInsensitiveOption).match(QString::fromLatin1(header));if(vm.hasMatch())version=vm.captured(1).toInt();
     const bool wide_offsets=version>=11;auto offset=[&](BeReader &reader)->quint64{return wide_offsets?reader.u64():reader.u32();};
@@ -1764,6 +1766,29 @@ static QString save_imported_png(const QImage &image,const QString &source,const
 
 } // namespace fxm_document_import
 
+static QStringList unified_import_media_patterns()
+{
+    return {
+        QStringLiteral("*.mp4"), QStringLiteral("*.mov"),
+        QStringLiteral("*.mkv"), QStringLiteral("*.webm"),
+        QStringLiteral("*.avi"), QStringLiteral("*.mxf"),
+        QStringLiteral("*.ts"), QStringLiteral("*.m2ts"),
+        QStringLiteral("*.mts"), QStringLiteral("*.mpeg"),
+        QStringLiteral("*.mpg"), QStringLiteral("*.m4v"),
+        QStringLiteral("*.wmv"), QStringLiteral("*.flv"),
+        QStringLiteral("*.ogv"), QStringLiteral("*.wav"),
+        QStringLiteral("*.flac"), QStringLiteral("*.mp3"),
+        QStringLiteral("*.aac"), QStringLiteral("*.m4a"),
+        QStringLiteral("*.ogg"), QStringLiteral("*.oga"),
+        QStringLiteral("*.opus"), QStringLiteral("*.wma"),
+        QStringLiteral("*.aiff"), QStringLiteral("*.aif"),
+        QStringLiteral("*.ac3"), QStringLiteral("*.3gp"),
+        QStringLiteral("*.3g2"), QStringLiteral("*.asf"),
+        QStringLiteral("*.vob"), QStringLiteral("*.mka"),
+        QStringLiteral("*.ape"), QStringLiteral("*.amr"),
+        QStringLiteral("*.au"), QStringLiteral("*.caf")};
+}
+
 static QStringList unified_import_image_patterns()
 {
     QSet<QString> unique;
@@ -1771,6 +1796,11 @@ static QStringList unified_import_image_patterns()
         const QString suffix = QString::fromLatin1(format).trimmed().toLower();
         if (!suffix.isEmpty()) unique.insert(QStringLiteral("*.") + suffix);
     }
+    /* FFmpeg handles these modern still-image containers in the same decoded
+     * media path when the packaged Qt build has no dedicated image plugin. */
+    unique.insert(QStringLiteral("*.avif"));
+    unique.insert(QStringLiteral("*.heic"));
+    unique.insert(QStringLiteral("*.heif"));
     QStringList patterns;
     for (const QString &pattern : unique) patterns.push_back(pattern);
     patterns.sort(Qt::CaseInsensitive);
@@ -1783,9 +1813,12 @@ static QString unified_import_filter()
         QStringLiteral("*.fxmp"), QStringLiteral("*.fxmt"),
         QStringLiteral("*.json")};
     const QStringList document_patterns = {
-        QStringLiteral("*.svg"), QStringLiteral("*.psd"), QStringLiteral("*.xcf")};
+        QStringLiteral("*.svg"), QStringLiteral("*.psd"),
+        QStringLiteral("*.xcf")};
     const QStringList image_patterns = unified_import_image_patterns();
-    QStringList all_patterns = title_patterns + document_patterns + image_patterns;
+    const QStringList media_patterns = unified_import_media_patterns();
+    QStringList all_patterns = title_patterns + document_patterns +
+                               image_patterns + media_patterns;
     all_patterns.removeDuplicates();
     return QStringList{
         QStringLiteral("%1 (%2)").arg(
@@ -1796,8 +1829,199 @@ static QString unified_import_filter()
             fxm_tr("OBSTitles.ImportDocuments"), document_patterns.join(' ')),
         QStringLiteral("%1 (%2)").arg(
             fxm_tr("OBSTitles.ImportImages"), image_patterns.join(' ')),
+        QStringLiteral("%1 (%2)").arg(
+            fxm_tr("OBSTitles.ImportMedia"), media_patterns.join(' ')),
         fxm_tr("OBSTitles.AllFiles")
     }.join(QStringLiteral(";;"));
+}
+
+bool TitleEditor::create_media_layer_from_external_source(
+    const QString &media_path, LayerType type, const QPointF &canvas_pt,
+    const fxm::video::MediaInfo *probed_media)
+{
+    if (!title_ || media_path.trimmed().isEmpty() ||
+        (type != LayerType::Video && type != LayerType::Audio))
+        return false;
+
+    const fxm::video::MediaInfo owned_media = probed_media
+        ? fxm::video::MediaInfo{} : fxm::video::probe_media(media_path.toStdString());
+    const fxm::video::MediaInfo &media = probed_media ? *probed_media : owned_media;
+    if (type == LayerType::Video && !media.valid) {
+        QMessageBox::warning(
+            this, fxm_tr("OBSTitles.ImportVideo"),
+            media.error.empty() ? fxm_tr("OBSTitles.VideoOpenFailed")
+                                : QString::fromStdString(media.error));
+        return false;
+    }
+
+    auto layer = create_basic_layer(type, QFileInfo(media_path).completeBaseName());
+    if (!layer)
+        return false;
+    layer->position.static_value.x = canvas_pt.x();
+    layer->position.static_value.y = canvas_pt.y();
+
+    if (type == LayerType::Audio) {
+        layer->audio_source = media_path.toStdString();
+        layer->audio_media_duration = std::max(0.0, media.duration);
+        layer->audio_out_point = media.duration > 0.0
+            ? std::min(media.duration, std::max(0.0, layer->out_time - layer->in_time))
+            : std::max(0.0, layer->out_time - layer->in_time);
+        if (!media.audio_streams.empty()) {
+            const auto &stream = media.audio_streams.front();
+            layer->audio_stream_index = stream.stream_index;
+            layer->audio_sample_rate = stream.sample_rate;
+            layer->audio_channels = stream.channels;
+        }
+    } else {
+        layer->group_collapsed = true;
+        layer->video_source = media_path.toStdString();
+        layer->video_stream_index = media.video_stream_index;
+        layer->video_media_duration = media.duration;
+        layer->video_out_point = media.duration;
+        layer->video_frame_rate = media.frame_rate;
+        layer->video_pixel_width = media.width;
+        layer->video_pixel_height = media.height;
+        layer->video_has_alpha = media.has_alpha;
+        layer->video_has_hdr = media.has_hdr;
+        layer->video_source_time = AnimatedProperty{
+            "video_source_time", layer->video_in_point};
+        layer->video_source_time.keyframes = {
+            Keyframe{0.0, layer->video_in_point, EasingType::Linear},
+            Keyframe{std::max(0.0, layer->video_out_point - layer->video_in_point),
+                     layer->video_out_point, EasingType::Linear}};
+        layer->video_time_remap_enabled = false;
+        layer->video_time_remap_loop_segments.clear();
+        layer->video_time_remap_curve_fingerprint.clear();
+        layer->video_optical_flow_cache_fingerprint.clear();
+        layer->image_width = std::max(1, media.width);
+        layer->image_height = std::max(1, media.height);
+        layer->image_size.static_value.x = layer->image_width;
+        layer->image_size.static_value.y = layer->image_height;
+        const double aspect = static_cast<double>(layer->image_width) /
+            std::max(1.0f, layer->image_height);
+        layer->rect_width = std::min<double>(title_->width * 0.6,
+                                             layer->image_width);
+        layer->rect_height = layer->rect_width / std::max(0.0001, aspect);
+        if (layer->rect_height > title_->height * 0.6) {
+            layer->rect_height = title_->height * 0.6;
+            layer->rect_width = layer->rect_height * aspect;
+        }
+        layer->size.static_value.x = layer->rect_width;
+        layer->size.static_value.y = layer->rect_height;
+        if (media.duration > 0.0)
+            layer->out_time = std::min(title_->duration, media.duration);
+        layer->video_out_point = std::min(
+            media.duration > 0.0 ? media.duration
+                                 : std::max(0.0, layer->out_time - layer->in_time),
+            std::max(0.0, layer->out_time - layer->in_time));
+    }
+
+    title_->add_layer(layer);
+    if (type == LayerType::Video) {
+        int ordinal = 1;
+        for (const auto &stream : media.audio_streams) {
+            QString stream_name = stream.title.empty()
+                ? fxm_tr("OBSTitles.VideoAudioStream").arg(ordinal)
+                : QString::fromStdString(stream.title);
+            if (!stream.language.empty())
+                stream_name += QStringLiteral(" [%1]").arg(
+                    QString::fromStdString(stream.language));
+            auto audio = create_basic_layer(LayerType::Audio, stream_name);
+            if (!audio)
+                continue;
+            audio->parent_id = layer->id;
+            audio->linked_media_layer_id = layer->id;
+            audio->linked_media_stream = true;
+            audio->media_stream_label = stream_name.toStdString();
+            audio->audio_source = media_path.toStdString();
+            audio->audio_stream_index = stream.stream_index;
+            audio->audio_sample_rate = stream.sample_rate;
+            audio->audio_channels = stream.channels;
+            audio->audio_media_duration = layer->video_media_duration;
+            audio->audio_in_point = layer->video_in_point;
+            audio->audio_out_point = layer->video_out_point;
+            audio->audio_independent = false;
+            audio->in_time = layer->in_time;
+            audio->out_time = layer->out_time;
+            title_->add_layer(audio);
+            ++ordinal;
+        }
+        synchronize_video_audio_streams(*title_, layer->id);
+    }
+
+    layers_->refresh();
+    on_layer_selected(layer->id);
+    force_next_title_visual_update();
+    on_title_modified();
+    return true;
+}
+
+bool TitleEditor::import_external_file_at(const QString &path,
+                                          const QPointF &canvas_pt,
+                                          bool show_errors)
+{
+    if (!title_ || !QFileInfo(path).isFile())
+        return false;
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (suffix == QStringLiteral("svg")) {
+        import_vector_document(path);
+        return true;
+    }
+    if (suffix == QStringLiteral("psd")) {
+        import_photoshop_document(path);
+        return true;
+    }
+    if (suffix == QStringLiteral("xcf")) {
+        import_gimp_document(path);
+        return true;
+    }
+    if (suffix == QStringLiteral("fxmp") || suffix == QStringLiteral("fxmt") ||
+        suffix == QStringLiteral("json")) {
+        if (!confirm_save_before_close())
+            return false;
+        std::string error;
+        auto imported = TitleDataStore::instance().import_title(
+            path.toStdString(), &error, nullptr);
+        if (!imported) {
+            if (show_errors) {
+                QMessageBox::warning(this, fxm_tr("OBSTitles.ImportFailed"),
+                    error.empty() ? fxm_tr("OBSTitles.ImportFailed")
+                                  : QString::fromStdString(error));
+            }
+            return false;
+        }
+        for (const auto &layer : imported->layers)
+            if (layer && layer->type == LayerType::Group)
+                layer->group_collapsed = true;
+        TitleDataStore::instance().notify_change();
+        TitleDataStore::instance().save_async();
+        open_title(imported->id);
+        show_editor_activity(fxm_tr("OBSTitles.ImportedStatusFormat")
+            .arg(QString::fromStdString(imported->name)));
+        return true;
+    }
+
+    QImageReader reader(path);
+    if (reader.canRead()) {
+        create_image_layer_from_external_source(path, canvas_pt);
+        return true;
+    }
+
+    const fxm::video::MediaInfo media =
+        fxm::video::probe_media(path.toStdString());
+    if (media.valid)
+        return create_media_layer_from_external_source(
+            path, LayerType::Video, canvas_pt, &media);
+    if (!media.audio_streams.empty())
+        return create_media_layer_from_external_source(
+            path, LayerType::Audio, canvas_pt, &media);
+
+    if (show_errors) {
+        const QString detail = media.error.empty()
+            ? reader.errorString() : QString::fromStdString(media.error);
+        QMessageBox::warning(this, fxm_tr("OBSTitles.ImportFailed"), detail);
+    }
+    return false;
 }
 
 void TitleEditor::import_document()
@@ -1808,53 +2032,11 @@ void TitleEditor::import_document()
         unified_import_filter());
     if (path.isEmpty()) return;
 
-    const QString suffix = QFileInfo(path).suffix().toLower();
-    if (suffix == QStringLiteral("svg")) {
-        import_vector_document(path);
-        return;
-    }
-    if (suffix == QStringLiteral("psd")) {
-        import_photoshop_document(path);
-        return;
-    }
-    if (suffix == QStringLiteral("xcf")) {
-        import_gimp_document(path);
-        return;
-    }
-    if (suffix == QStringLiteral("fxmp") || suffix == QStringLiteral("fxmt") ||
-        suffix == QStringLiteral("json")) {
-        if (!confirm_save_before_close()) return;
-        std::string error;
-        auto imported = TitleDataStore::instance().import_title(
-            path.toStdString(), &error, nullptr);
-        if (!imported) {
-            QMessageBox::warning(this, fxm_tr("OBSTitles.ImportFailed"),
-                error.empty() ? fxm_tr("OBSTitles.ImportFailed")
-                              : QString::fromStdString(error));
-            return;
-        }
-        for (const auto &layer : imported->layers)
-            if (layer && layer->type == LayerType::Group)
-                layer->group_collapsed = true;
-        TitleDataStore::instance().notify_change();
-        TitleDataStore::instance().save_async();
-        open_title(imported->id);
-        show_editor_activity(fxm_tr("OBSTitles.ImportedStatusFormat")
-            .arg(QString::fromStdString(imported->name)));
-        return;
-    }
-
-    QImageReader reader(path);
-    if (!reader.canRead()) {
-        QMessageBox::warning(this, fxm_tr("OBSTitles.ImportFailed"),
-                             reader.errorString());
-        return;
-    }
     const QPointF center = canvas_ ? canvas_->view_center_canvas_point()
                                    : QPointF(title_->width * 0.5, title_->height * 0.5);
-    create_image_layer_from_external_source(path, center);
-    show_editor_activity(fxm_tr("OBSTitles.ImportedStatusFormat")
-        .arg(QFileInfo(path).fileName()));
+    if (import_external_file_at(path, center, true))
+        show_editor_activity(fxm_tr("OBSTitles.ImportedStatusFormat")
+            .arg(QFileInfo(path).fileName()));
 }
 
 void TitleEditor::import_vector_document()
@@ -1905,7 +2087,7 @@ void TitleEditor::import_vector_document(const QString &path)
         layer->fill_type=shape.style.fill_gradient_stops.size()>=2?1:0; layer->fill_color=shape.style.fill_none?0:fxm_document_import::argb(shape.style.fill,shape.style.fill_opacity);
         if(layer->fill_type==1){layer->gradient_type=shape.style.fill_gradient_type;layer->gradient_spread=shape.style.fill_gradient_spread;layer->gradient_angle=float(shape.style.fill_gradient_angle);layer->gradient_center_x=float(shape.style.fill_gradient_center_x);layer->gradient_center_y=float(shape.style.fill_gradient_center_y);layer->gradient_scale=float(shape.style.fill_gradient_scale);layer->gradient_focal_x=float(shape.style.fill_gradient_focal_x);layer->gradient_focal_y=float(shape.style.fill_gradient_focal_y);const auto first=shape.style.fill_gradient_stops.front(),last=shape.style.fill_gradient_stops.back();layer->gradient_start_color=fxm_document_import::argb(first.second,shape.style.fill_opacity);layer->gradient_end_color=fxm_document_import::argb(last.second,shape.style.fill_opacity);layer->gradient_start_pos=float(first.first);layer->gradient_end_pos=float(last.first);layer->gradient_stops.clear();for(int i=1;i+1<shape.style.fill_gradient_stops.size();++i){GradientStop stop;stop.position=float(shape.style.fill_gradient_stops[i].first);stop.color=fxm_document_import::argb(shape.style.fill_gradient_stops[i].second,shape.style.fill_opacity);stop.opacity=1.0f;layer->gradient_stops.push_back(stop);}}
         layer->outline_enabled=!shape.style.stroke_none&&shape.style.stroke_width>0.0; layer->stroke_fill_type=shape.style.stroke_gradient_stops.size()>=2?2:(layer->outline_enabled?1:0);
-        layer->stroke_color=fxm_document_import::argb(shape.style.stroke,shape.style.stroke_opacity); layer->stroke_width=float(shape.style.stroke_width);layer->outline_join_style=shape.style.stroke_join_style;
+        layer->stroke_color=fxm_document_import::argb(shape.style.stroke,shape.style.stroke_opacity); layer->stroke_width=float(shape.style.stroke_width);layer->stroke_width_prop.static_value=layer->stroke_width;layer->outline_join_style=shape.style.stroke_join_style;
         if(layer->stroke_fill_type==2){layer->stroke_gradient_type=shape.style.stroke_gradient_type;layer->stroke_gradient_spread=shape.style.stroke_gradient_spread;layer->stroke_gradient_angle=float(shape.style.stroke_gradient_angle);layer->stroke_gradient_center_x=float(shape.style.stroke_gradient_center_x);layer->stroke_gradient_center_y=float(shape.style.stroke_gradient_center_y);layer->stroke_gradient_scale=float(shape.style.stroke_gradient_scale);layer->stroke_gradient_focal_x=float(shape.style.stroke_gradient_focal_x);layer->stroke_gradient_focal_y=float(shape.style.stroke_gradient_focal_y);const auto first=shape.style.stroke_gradient_stops.front(),last=shape.style.stroke_gradient_stops.back();layer->stroke_gradient_start_color=fxm_document_import::argb(first.second,shape.style.stroke_opacity);layer->stroke_gradient_end_color=fxm_document_import::argb(last.second,shape.style.stroke_opacity);layer->stroke_gradient_start_pos=float(first.first);layer->stroke_gradient_end_pos=float(last.first);layer->stroke_gradient_stops.clear();for(int i=1;i+1<shape.style.stroke_gradient_stops.size();++i){GradientStop stop;stop.position=float(shape.style.stroke_gradient_stops[i].first);stop.color=fxm_document_import::argb(shape.style.stroke_gradient_stops[i].second,shape.style.stroke_opacity);stop.opacity=1.0f;layer->stroke_gradient_stops.push_back(stop);}}
         layer->opacity.static_value=shape.native_text?1.0:qBound(0.0,shape.style.opacity,1.0);set_channel_statics(*layer,false,layer->fill_color);if(shape.native_text)set_channel_statics(*layer,true,layer->text_color);
         if (group) layer->parent_id=group->id; title_->add_layer(layer); last_id=layer->id;

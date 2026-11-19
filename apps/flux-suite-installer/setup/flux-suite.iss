@@ -5,13 +5,13 @@
   #define FluxSetupOutputDir "..\..\..\out\dist\windows-x64\Flux Installer Setup"
 #endif
 #ifndef FluxAppVersion
-  #define FluxAppVersion "2026 - v0.8.19-1-alpha"
+  #define FluxAppVersion "2026 - v0.8.21-alpha"
 #endif
 #ifndef FluxNumericVersion
-  #define FluxNumericVersion "0.8.19.1"
+  #define FluxNumericVersion "0.8.21.0"
 #endif
 #ifndef FluxOutputBaseFilename
-  #define FluxOutputBaseFilename "Flux_Suite_Setup_2026_-_v0.8.19-1-alpha_windows-x64"
+  #define FluxOutputBaseFilename "Flux_Suite_Setup_2026_-_v0.8.21-alpha_windows-x64"
 #endif
 
 [Setup]

@@ -112,7 +112,7 @@ def test_shadow_pass_is_depth_tested_alpha_aware_and_fail_open():
     resources = read('../../packages/flux-common/Shared/rendering-engine/title-source/gpu-masks-groups-cache.inc')
     lifecycle = read('../../packages/flux-common/Shared/rendering-engine/title-source/source-lifecycle-playback.inc')
     for token in (
-        'kGpuShadowMapEffect', 'clip(alpha - alphaCutoff);',
+        'kGpuShadowMapEffect', 'if (alpha < effectiveCutoff)',
         'float shadow_visibility(float3 worldPosition)',
         'for (int y = -1; y <= 1; ++y)',
         'for (int x = -1; x <= 1; ++x)'):

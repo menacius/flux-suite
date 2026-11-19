@@ -69,6 +69,33 @@ for token in (
 assert "EditorExecutionContext::obsPlugin(" in main
 assert "EditorExecutionContext::standalone()" in main
 
+# File > Import, Explorer drag/drop and clipboard URL paste all share one
+# dispatcher for raster/vector images, layered documents and FFmpeg media.
+canvas = read("src/canvas/canvas-preview/gpu-frame-rendering.inc")
+canvas_h = read("src/canvas/canvas-preview.h")
+layout_tools = read("src/editor/title-editor/layout-template-tools.inc")
+cmake = read("CMakeLists.txt")
+commands = read("src/editor/title-editor/commands-docks.inc")
+for token in (
+    "unified_import_media_patterns()",
+    "create_media_layer_from_external_source(",
+    "import_external_file_at(",
+    "fxm::video::probe_media",
+    "LayerType::Video",
+    "LayerType::Audio",
+):
+    assert token in imports, token
+assert "external_file_import_requested" in canvas
+assert "external_file_import_requested" in canvas_h
+assert "return !path.trimmed().isEmpty() && QFileInfo(path).isFile();" in canvas
+assert "import_external_file_at(path, canvas_pt, false)" in layout_tools
+for pattern in ("*.avif", "*.heic", "*.heif"):
+    assert pattern in imports
+assert "file.size()>512ll*1024ll*1024ll" in imports
+assert 'plugins/imageformats' in cmake
+assert 'EXCLUDE REGEX "d\\\\.dll$"' in cmake
+assert "const QByteArray bytes = media.readAll();" not in commands
+
 # Standalone Save is path-aware and first Save delegates to Save As.
 assert "current_project_path_.isEmpty()" in workflow
 assert "return save_title_as();" in workflow

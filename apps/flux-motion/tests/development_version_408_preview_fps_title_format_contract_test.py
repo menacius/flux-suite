@@ -15,6 +15,8 @@ serialization = read("src/core/title-data.cpp")
 properties_h = read("src/editor/title-properties-panel.h")
 properties_cpp = read("src/editor/title-properties-panel.cpp")
 editor_connections = read("src/editor/title-editor/commands-docks.inc")
+editor_events = read("src/editor/title-editor/editor-events.inc")
+locale = read("data/locale/en-US.ini")
 editor_open = read("src/editor/title-editor/playback-cache-preferences.inc")
 frame_rate_h = read("../../packages/flux-common/Shared/frame-rate-provider.h")
 standalone_host = read("Editor/standalone-editor-host.h")
@@ -46,6 +48,9 @@ assert "reset_playback_timer_cadence();" in editor_connections
 # diagnostic window as the GPU swap-chain path.
 assert "const bool playback_present = transport_playback_active_" in canvas_paint
 assert "record_live_playback_present();" in canvas_paint
+assert "canvas_->live_playback_fps()" in editor_events
+assert 'fxm_tr("OBSTitles.TimeFpsLiveFormat")' in editor_events
+assert 'OBSTitles.TimeFpsLiveFormat="%1  (live %2 / %3 fps)"' in locale
 
 # Reduced playback quality must shrink the render target and layer shading work,
 # not render a full title and only scale the completed image afterward.

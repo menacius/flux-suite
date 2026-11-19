@@ -7,6 +7,7 @@
   "protocolVersion": 1,
   "executionMode": "out-of-process",
   "executable": "renderer/flux-motion-renderer.exe",
+  "linuxExecutable": "renderer/flux-motion-renderer",
   "projectExtensions": ["*.fxmt", "*.fxmp", "*.json"],
   "capabilities": ["project-probe", "direct-project-files", "video-frames", "audio-mix", "alpha", "frame-ranges", "external-data-snapshot"],
   "headless": true

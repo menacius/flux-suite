@@ -71,6 +71,8 @@ int main(int argc, char **argv)
 
     ok &= require(title_data, "Title entry root must be a JSON object",
                   "unrecoverable title roots are isolated per entry");
+    ok &= require(title_data, "filesystem_path_from_utf8(path)",
+                  "project, template and embedded-asset paths use explicit UTF-8 filesystem conversion");
     ok &= require(title_data, "Never rewrite a",
                   "layer IDs remain stable");
     ok &= require(title_data, "Imported templates need a new title identity",
@@ -80,7 +82,7 @@ int main(int argc, char **argv)
     ok &= require(title_data, "!QFileInfo::exists",
                   "missing external assets are diagnostic-only");
 
-    ok &= require(styles, "kStylePresetFileVersion = 3",
+    ok &= require(styles, "kStylePresetFileVersion = 4",
                   "style preset file schema");
     ok &= require(styles, "kCurrentFormattingSchemaVersion",
                   "style preset formatting schema");

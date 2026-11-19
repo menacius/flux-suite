@@ -834,7 +834,10 @@ void MainWindow::buildUi()
     restoreLastWorkspace();
 }
 
-void MainWindow::detectCapabilities(){capabilityWatcher_.setFuture(QtConcurrent::run([]{return FfmpegCapabilityDetector::detect();}));}
+void MainWindow::detectCapabilities(){capabilityWatcher_.setFuture(QtConcurrent::run([]{
+    const bool runtimeProbe = !qEnvironmentVariableIsSet("FLUX_ENCODER_SKIP_RUNTIME_PROBES");
+    return FfmpegCapabilityDetector::detect({}, {}, runtimeProbe);
+}));}
 void MainWindow::handleCapabilitiesReady(){capabilities_=capabilityWatcher_.result();if(capabilities_.ffmpegPath.isEmpty()){capabilityLabel_->setText(tr("FFmpeg was not found. Install FFmpeg or place it beside the application."));statusBar()->showMessage(tr("FFmpeg unavailable"));}else{int usable=0;for(auto it=capabilities_.encoderProbes.cbegin();it!=capabilities_.encoderProbes.cend();++it)if(it->runtimeAvailable)++usable;capabilityLabel_->setText(tr("%1\nAvailable hardware encoders: %2").arg(capabilities_.version).arg(usable));statusBar()->showMessage(tr("Ready"));}
     if(rendererCombo_){
         const QSignalBlocker blocker(rendererCombo_); while(rendererCombo_->count()>2) rendererCombo_->removeItem(2);

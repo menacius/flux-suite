@@ -20,6 +20,8 @@ static int titles_compact_rail_height(QWidget *widget)
 static QString title_cue_state_text(TitleCueVisualState state)
 {
     switch (state) {
+    case TitleCueVisualState::PendingChanges:
+        return fxm_tr("OBSTitles.ProgramChangesPending");
     case TitleCueVisualState::Queued:
         return fxm_tr("OBSTitles.TitlesRailCueQueued");
     case TitleCueVisualState::Cued:
@@ -35,6 +37,8 @@ static QString title_cue_state_text(TitleCueVisualState state)
 static QString title_cue_state_short_text(TitleCueVisualState state)
 {
     switch (state) {
+    case TitleCueVisualState::PendingChanges:
+        return QStringLiteral("Pending");
     case TitleCueVisualState::Queued:
         return fxm_tr("OBSTitles.TitlesRailCueQueuedShort");
     case TitleCueVisualState::Cued:
@@ -105,6 +109,10 @@ void TitleDock::set_titles_collapsed(bool collapsed, bool persist)
     }
 
     titles_collapsed_ = collapsed;
+    if (act_titles_collapsed_) {
+        QSignalBlocker block(act_titles_collapsed_);
+        act_titles_collapsed_->setChecked(collapsed);
+    }
     update_titles_compact_rail();
     update_titles_collapse_direction();
 
@@ -114,10 +122,12 @@ void TitleDock::set_titles_collapsed(bool collapsed, bool persist)
         titles_section_->setMinimumHeight(compact_height);
         titles_section_->setMaximumHeight(compact_height);
         if (sections_) {
-            const QList<int> current = sections_->sizes();
-            const int total = std::accumulate(current.begin(), current.end(), 0);
-            sections_->setSizes({compact_height,
-                                 std::max(1, total - compact_height)});
+            QList<int> sizes = sections_->sizes();
+            if (sizes.size() >= 2) {
+                sizes[1] += sizes[0] - compact_height;
+                sizes[0] = compact_height;
+                sections_->setSizes(sizes);
+            }
         }
     } else {
         titles_section_->setMinimumHeight(0);
@@ -126,13 +136,14 @@ void TitleDock::set_titles_collapsed(bool collapsed, bool persist)
         titles_expanded_content_->show();
         if (isFloating() && titles_expanded_width_ >= kTitlesMinimumExpandedWidth)
             resize(titles_expanded_width_, height());
-        if (sections_) {
+        if (sections_ && (state_changed ||
+                          sections_->sizes().value(0) <= compact_height)) {
             const int requested = std::max(kTitlesDefaultExpandedSplitterSize,
                                            titles_expanded_splitter_size_);
             QTimer::singleShot(0, this, [this, requested, compact_height]() {
                 if (!sections_ || titles_collapsed_)
                     return;
-                const QList<int> current = sections_->sizes();
+                QList<int> current = sections_->sizes();
                 const int total = std::accumulate(current.begin(), current.end(), 0);
                 if (total <= 0) {
                     sections_->setSizes({requested, 96});
@@ -140,12 +151,18 @@ void TitleDock::set_titles_collapsed(bool collapsed, bool persist)
                 }
                 const int minimum_title_size =
                     compact_height + obs_layout_spacing(sections_);
+                const int other_sizes = current.size() > 2
+                    ? std::accumulate(current.begin() + 2, current.end(), 0) : 0;
                 const int maximum_title_size = std::max(minimum_title_size,
-                                                        total - 96);
+                                                        total - other_sizes - 96);
                 const int title_size = std::clamp(requested,
                                                   minimum_title_size,
                                                   maximum_title_size);
-                sections_->setSizes({title_size, std::max(1, total - title_size)});
+                if (current.size() >= 2) {
+                    current[0] = title_size;
+                    current[1] = std::max(1, total - other_sizes - title_size);
+                    sections_->setSizes(current);
+                }
             });
         }
     }
@@ -187,7 +204,14 @@ void TitleDock::update_titles_compact_rail()
     const bool waiting_for_prerender = cache_waiting_title_id_ == title_id &&
         cache_waiting_cue_row_ >= 0;
     const TitleCueVisualState cue_state = title_cue_visual_state(*title, waiting_for_prerender);
-    titles_compact_cue_state_->setIcon(obs_icon("cue.svg", title_cue_visual_color(cue_state)));
+    const QColor cue_color = title_cue_visual_color(cue_state);
+    titles_compact_cue_state_->setIcon(obs_icon("cue.svg", cue_color));
+    QPalette cue_palette = titles_compact_cue_state_->parentWidget()->palette();
+    if (cue_state == TitleCueVisualState::PendingChanges) {
+        cue_palette.setColor(QPalette::ButtonText, cue_color);
+        cue_palette.setColor(QPalette::WindowText, cue_color);
+    }
+    titles_compact_cue_state_->setPalette(cue_palette);
     titles_compact_cue_state_->setText(title_cue_state_short_text(cue_state));
     titles_compact_cue_state_->setToolTip(title_cue_state_text(cue_state));
 

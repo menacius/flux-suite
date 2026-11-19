@@ -771,7 +771,7 @@
     };
     transport_layout->addStretch(1);
     time_lbl_ = new QLabel("0.000 s", timeline_transport);
-    time_lbl_->setMinimumWidth(116);
+    time_lbl_->setMinimumWidth(190);
     time_lbl_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     time_lbl_->setStyleSheet(QStringLiteral(
         "background:%1;color:%2;border-radius:2px;padding:2px 6px;")
@@ -1074,24 +1074,11 @@
                     const QString audio_path = media_path;
                     l->audio_source = audio_path.toStdString();
                     l->audio_out_point = std::max(0.0, l->out_time - l->in_time);
-                    QFile media(audio_path);
-                    if (media.open(QIODevice::ReadOnly)) {
-                        const QByteArray bytes = media.readAll();
-                        constexpr int peak_pairs = 512;
-                        l->audio_waveform.reserve(peak_pairs * 2);
-                        for (int bucket = 0; bucket < peak_pairs; ++bucket) {
-                            const qsizetype begin = bytes.size() * bucket / peak_pairs;
-                            const qsizetype end = bytes.size() * (bucket + 1) / peak_pairs;
-                            float lo = 0.0f, hi = 0.0f;
-                            for (qsizetype i = begin; i < end; ++i) {
-                                const float sample = (static_cast<unsigned char>(bytes.at(i)) - 127.5f) / 127.5f;
-                                lo = std::min(lo, sample);
-                                hi = std::max(hi, sample);
-                            }
-                            l->audio_waveform.push_back(lo);
-                            l->audio_waveform.push_back(hi);
-                        }
-                    }
+                    /* Waveforms are decoded asynchronously by the shared audio
+                     * runtime. Reading a complete compressed media file into
+                     * the UI thread here consumed memory proportional to the
+                     * file size and produced peaks from container bytes rather
+                     * than audio samples. */
                 } else if (type == LayerType::Video) {
                     const fxm::video::MediaInfo &media = video_media;
                     l->group_collapsed = true;

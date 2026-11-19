@@ -88,7 +88,8 @@ assert "render_gpu_group_graph_texture" in compositor
 
 # Cut out fully transparent raster pixels before depth is written.
 assert "PSDepthLayer" in shader
-assert "clip(color.a - 0.0039215686)" in shader
+assert "if (color.a < 0.0039215686)" in shader
+assert "discard;" in shader
 assert "technique DepthDraw" in shader
 
 # Hardware depth is runtime/render-state only; no new persisted schema field.

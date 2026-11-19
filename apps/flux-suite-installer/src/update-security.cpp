@@ -12,6 +12,12 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <bcrypt.h>
+#else
+#include <openssl/bn.h>
+#include <openssl/core_names.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
+#include <openssl/params.h>
 #endif
 
 namespace {
@@ -27,7 +33,11 @@ QByteArray decodedCoordinate(const QJsonObject &key, const char *name)
 
 QString UpdateSecurity::defaultFeedUrl()
 {
+#ifdef Q_OS_WIN
     return QStringLiteral("https://software.omniatv.com/flux-suite/windows-x64/manifest.json");
+#else
+    return QStringLiteral("https://software.omniatv.com/flux-suite/linux-x86_64/manifest.json");
+#endif
 }
 
 bool UpdateSecurity::isTrustedRemoteUrl(const QUrl &url, QString *error)
@@ -47,14 +57,6 @@ bool UpdateSecurity::verifyFeedSignature(const QByteArray &payload,
                                          const QByteArray &base64Signature,
                                          QString *error)
 {
-#ifndef Q_OS_WIN
-    Q_UNUSED(payload)
-    Q_UNUSED(base64Signature)
-    if (error) {
-        *error = QStringLiteral("Signed update verification is only available on Windows.");
-    }
-    return false;
-#else
     QFile keyFile(QStringLiteral(":/flux/update-public-key.json"));
     if (!keyFile.open(QIODevice::ReadOnly)) {
         if (error) *error = QStringLiteral("The update trust anchor is unavailable.");
@@ -76,6 +78,7 @@ bool UpdateSecurity::verifyFeedSignature(const QByteArray &payload,
         return false;
     }
 
+#ifdef Q_OS_WIN
     BCRYPT_ALG_HANDLE algorithm = nullptr;
     BCRYPT_KEY_HANDLE publicKey = nullptr;
     NTSTATUS status = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_ECDSA_P256_ALGORITHM,
@@ -107,6 +110,56 @@ bool UpdateSecurity::verifyFeedSignature(const QByteArray &payload,
         return false;
     }
     return true;
+#else
+    QByteArray publicPoint(65, Qt::Uninitialized);
+    publicPoint[0] = char(0x04);
+    memcpy(publicPoint.data() + 1, x.constData(), 32);
+    memcpy(publicPoint.data() + 33, y.constData(), 32);
+
+    EVP_PKEY_CTX *keyContext = EVP_PKEY_CTX_new_from_name(nullptr, "EC", nullptr);
+    EVP_PKEY *publicKey = nullptr;
+    char curve[] = "prime256v1";
+    OSSL_PARAM parameters[] = {
+        OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME, curve, 0),
+        OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+                                           publicPoint.data(), size_t(publicPoint.size())),
+        OSSL_PARAM_construct_end()
+    };
+    bool valid = keyContext && EVP_PKEY_fromdata_init(keyContext) > 0
+        && EVP_PKEY_fromdata(keyContext, &publicKey, EVP_PKEY_PUBLIC_KEY, parameters) > 0;
+    EVP_PKEY_CTX_free(keyContext);
+
+    ECDSA_SIG *ecdsaSignature = ECDSA_SIG_new();
+    BIGNUM *r = BN_bin2bn(reinterpret_cast<const unsigned char *>(signature.constData()), 32, nullptr);
+    BIGNUM *s = BN_bin2bn(reinterpret_cast<const unsigned char *>(signature.constData() + 32), 32, nullptr);
+    valid = valid && ecdsaSignature && r && s && ECDSA_SIG_set0(ecdsaSignature, r, s) == 1;
+    if (!valid) {
+        BN_free(r);
+        BN_free(s);
+    }
+
+    QByteArray derSignature;
+    if (valid) {
+        const int derSize = i2d_ECDSA_SIG(ecdsaSignature, nullptr);
+        derSignature.resize(qMax(0, derSize));
+        unsigned char *der = reinterpret_cast<unsigned char *>(derSignature.data());
+        valid = derSize > 0 && i2d_ECDSA_SIG(ecdsaSignature, &der) == derSize;
+    }
+    ECDSA_SIG_free(ecdsaSignature);
+
+    EVP_MD_CTX *verifyContext = EVP_MD_CTX_new();
+    valid = valid && verifyContext
+        && EVP_DigestVerifyInit(verifyContext, nullptr, EVP_sha256(), nullptr, publicKey) > 0
+        && EVP_DigestVerify(verifyContext,
+                            reinterpret_cast<const unsigned char *>(derSignature.constData()),
+                            size_t(derSignature.size()),
+                            reinterpret_cast<const unsigned char *>(payload.constData()),
+                            size_t(payload.size())) == 1;
+    EVP_MD_CTX_free(verifyContext);
+    EVP_PKEY_free(publicKey);
+    if (!valid && error)
+        *error = QStringLiteral("The update catalog signature is not trusted.");
+    return valid;
 #endif
 }
 

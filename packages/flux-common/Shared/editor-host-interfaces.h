@@ -119,6 +119,10 @@ public:
     virtual ~IEditorHost() = default;
     virtual void *main_window_handle() const noexcept = 0;
     virtual std::vector<TitleSourceBinding> title_sources() const = 0;
+    virtual bool supports_scene_transition_cues() const { return false; }
+    virtual bool uncue_before_scene_transition() const { return false; }
+    virtual void set_uncue_before_scene_transition(bool) {}
+    virtual bool title_has_pending_program_changes(const std::string &, int = -1) const { return false; }
     virtual int remove_title_sources(
         const std::vector<std::string> &title_ids) = 0;
     virtual bool add_title_to_current_scene(

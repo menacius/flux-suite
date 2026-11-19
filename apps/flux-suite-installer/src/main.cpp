@@ -77,6 +77,9 @@ int main(int argc, char *argv[])
                                                  QStringLiteral("path"));
     QCommandLineOption validateOption(QStringLiteral("validate-manifest"),
                                       QStringLiteral("Validate the bundled manifest and exit."));
+    QCommandLineOption validateWindowOption(
+        QStringLiteral("validate-window-behavior"),
+        QStringLiteral("Validate that the main window is movable and resizable."));
     QCommandLineOption verifyOption(QStringLiteral("verify-packages"),
                                     QStringLiteral("Verify every local package against the manifest and exit."));
     QCommandLineOption installProductOption(QStringLiteral("install-product"),
@@ -107,6 +110,7 @@ int main(int argc, char *argv[])
     parser.addOption(screenshotOption);
     parser.addOption(uninstallScreenshotOption);
     parser.addOption(validateOption);
+    parser.addOption(validateWindowOption);
     parser.addOption(verifyOption);
     parser.addOption(installProductOption);
     parser.addOption(targetOption);
@@ -228,6 +232,20 @@ int main(int argc, char *argv[])
     }
 
     InstallerWindow window(parser.value(manifestOption));
+    if (parser.isSet(validateWindowOption)) {
+#if defined(Q_OS_LINUX)
+        const Qt::WindowFlags flags = window.windowFlags();
+        if (flags.testFlag(Qt::FramelessWindowHint) ||
+            !flags.testFlag(Qt::WindowTitleHint) ||
+            !flags.testFlag(Qt::WindowMinMaxButtonsHint) ||
+            !flags.testFlag(Qt::WindowCloseButtonHint) ||
+            window.minimumSize() == window.maximumSize()) {
+            qCritical("Linux window manager decorations or resize constraints are invalid.");
+            return 27;
+        }
+#endif
+        return 0;
+    }
     window.show();
 
     if (parser.isSet(screenshotOption)) {

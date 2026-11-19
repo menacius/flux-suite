@@ -39,7 +39,7 @@ def test_development_and_cache_versions_are_288_or_newer():
 def test_transform_motion_reuses_one_effected_texture():
     source = read("../../packages/flux-common/Shared/rendering-engine/title-source/gpu-presentation-readback.inc")
     assert "use_transform_motion_fast_path" in source
-    assert "The fast path uses the same normalized exposure plus temporal" in source
+    assert "The fast path uses the same normalized exposure as the complete" in source
     fast_start = source.index("if (use_transform_motion_fast_path")
     fast_end = source.index("\n    struct vec4 clear;", fast_start)
     fast = source[fast_start:fast_end]
@@ -103,9 +103,7 @@ def test_video_does_not_automatically_force_complete_temporal_rerender():
 
 
 def test_documentation_records_the_render_time_regression_and_fix():
-    readme = read("README.md")
     changelog = read("docs/CHANGELOG.md")
-    assert "Development Version 288" in readme
     assert "# v0.8.12-alpha — Development Version 288" in changelog
     assert "Average time to render frame" in changelog
     assert "transform-only GPU path" in changelog

@@ -64,7 +64,7 @@ def test_source_uses_one_normal_stack_draw_for_planar_scene_masks():
     assert "title_gpu_render_session_draw(" in integrated
     assert "title_gpu_render_session_draw_over_current_target(" in integrated
     assert "if (!scene_masks_in_layer_pipeline)" in render
-    assert "render_scene_masks_gpu(data, *title, data->playhead);" in render
+    assert "render_scene_masks_gpu(data, *title, data->playhead, &masks_complete);" in render
 
 
 if __name__ == "__main__":

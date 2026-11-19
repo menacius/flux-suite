@@ -502,9 +502,9 @@ QString editor_font_awesome_family()
             QStringLiteral("Font Awesome 5 Free"),
             QStringLiteral("FontAwesome")
         };
-        const QStringList available = QFontDatabase().families();
+        QFontDatabase database;
         for (const QString &candidate : preferred) {
-            if (available.contains(candidate, Qt::CaseInsensitive))
+            if (database.hasFamily(candidate))
                 return candidate;
         }
         return QString();

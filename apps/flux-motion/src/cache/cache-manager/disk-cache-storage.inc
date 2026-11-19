@@ -985,6 +985,7 @@ QString CacheManager::contentHash(const Title &title) const
 
         add(layer->outline_enabled); add(layer->stroke_fill_type); add((quint32)layer->stroke_color);
         add(layer->stroke_width); add(layer->outline_opacity); add(layer->outline_join_style);
+        add_anim(layer->stroke_width_prop);
         add(layer->outline_on_front); add(layer->outline_alignment); add(layer->outline_antialias);
         add(layer->stroke_gradient_type); add(layer->stroke_gradient_spread);
         add((quint32)layer->stroke_gradient_start_color); add((quint32)layer->stroke_gradient_end_color);
@@ -1232,6 +1233,7 @@ QString CacheManager::evaluatedVisualStateHash(const Title &title, double time,
         add_anim(layer->stroke_color_a); add_anim(layer->stroke_color_r);
         add_anim(layer->stroke_color_g); add_anim(layer->stroke_color_b);
         add_anim(layer->stroke_offset_prop);
+        add_anim(layer->stroke_width_prop);
         add_anim(layer->background_enabled_prop); add_anim(layer->background_opacity_prop);
         add_anim(layer->background_padding_x_prop); add_anim(layer->background_padding_y_prop);
         add_anim(layer->background_padding_left_prop); add_anim(layer->background_padding_right_prop);

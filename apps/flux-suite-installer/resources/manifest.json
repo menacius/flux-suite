@@ -1,6 +1,6 @@
 {
   "schema": 2,
-  "suiteVersion": "2026 - v0.8.19-1-alpha",
+  "suiteVersion": "2026 - v0.8.21-alpha",
   "channel": "Alpha",
   "products": [
     {
@@ -18,6 +18,7 @@
       "size": 161930391,
       "installFolder": "Flux Encoder",
       "executable": "Flux Encoder.exe",
+      "linuxExecutable": "flux-encoder",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
@@ -35,26 +36,29 @@
       "name": "Flux Motion",
       "tagline": "Real-time graphics authoring",
       "description": "Design broadcast graphics, titles and motion scenes in one focused workspace.",
-      "version": "2026 - v0.8.19-1-alpha",
+      "version": "2026 - v0.8.21-alpha",
       "accent": "#ff416c",
       "glyph": "FM",
       "icon": ":/flux/icons/flux-motion.svg",
-      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.19-1-alpha_windows-x64.zip",
+      "package": "../Flux Motion/Flux_Motion_2026_-_v0.8.21-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "66678ce7afa0ebdc2c7505b7db4377c60a9826833881aa024e8bd787d3555e92",
-      "size": 57974712,
+      "sha256": "0a57568c103e4fe07860a29d9d947a34f7ea19b2005ad41c4dbc0092f1c3d2a1",
+      "size": 58660633,
       "installFolder": "Flux Motion",
       "executable": "Flux Motion.exe",
+      "linuxExecutable": "flux-motion",
       "packageRoot": "",
       "kind": "application",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.18-alpha",
-        "version": "2026 - v0.8.19-1-alpha",
+        "fromVersion": "2026 - v0.8.20-alpha",
+        "version": "2026 - v0.8.21-alpha",
         "entries": [
-          "Eliminated the multi-minute first-render freeze by keeping ordinary 2D layer copies on a compact GPU shader and loading advanced lighting/shadow code only when a 3D lit layer needs it.",
-          "Added a real-layer GPU startup smoke test covering both initial shader compilation and compositor readback.",
-          "Retained the native Chart, adaptive playback, Welcome screen and cache improvements from the v0.8.19 alpha release."
+          "Updated Flux Motion to Development Version 430 with shared renderer and live graphics fixes.",
+          "Kept Program artwork on air during authoring edits until the next cue, including outgoing outros.",
+          "Preserved cue and playlist state across title-library reloads and retained unchanged scene-mask media references.",
+          "Fixed double-click word editing in Live Text Cue fields while retaining hotkey and read-only protections.",
+          "Improved scene-mask and GPU cache reuse, cached animation analysis and reduced hidden/silent source work."
         ]
       }
     },
@@ -63,26 +67,34 @@
       "name": "Flux Motion Plugin for OBS",
       "tagline": "Native OBS graphics integration",
       "description": "Cue and render Flux Motion projects directly inside OBS Studio.",
-      "version": "2026 - v0.8.19-1-alpha",
+      "version": "2026 - v0.8.21-alpha",
       "accent": "#14c9b3",
       "glyph": "FX",
       "icon": ":/flux/icons/flux-motion-obs.svg",
-      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.19-1-alpha_windows-x64.zip",
+      "package": "../Flux Motion Plugin for OBS/Flux_Motion_Plugin_for_OBS_2026_-_v0.8.21-alpha_windows-x64.zip",
       "url": "",
-      "sha256": "c327ba06e4f58f4e3dd899ef079483b3d75200ac95f262275a830a6c891ff1e8",
-      "size": 20713537,
+      "sha256": "ab56c48a47f3ef5ac4687d50af1422c8f65d0a26b015a24584e0053134461813",
+      "size": 20428778,
       "installFolder": "flux-motion",
-      "executable": "bin/64bit/flux-motion.dll",
+      "executable": "flux-motion.dll",
+      "linuxExecutable": "bin/64bit/flux-motion.so",
       "packageRoot": "flux-motion",
       "kind": "obs-plugin",
       "archiveLimit": 3,
       "changelog": {
-        "fromVersion": "2026 - v0.8.18-alpha",
-        "version": "2026 - v0.8.19-1-alpha",
+        "fromVersion": "2026 - v0.8.20-alpha",
+        "version": "2026 - v0.8.21-alpha",
         "entries": [
-          "Eliminated the OBS graphics-thread freeze caused by multi-minute compilation of unused 3D lighting and shadow shader code.",
-          "Registered the legacy Broadcast Graphics Live source identifier so existing OBS scenes continue to load after the obsolete plugin is removed.",
-          "Retained the shared native Chart renderer, host resolution/frame-rate handling and deterministic cache behavior from v0.8.19 alpha."
+          "Restored OBS Studio 33.0.1 loading and adopted its Windows plugin-manager folder layout.",
+          "Added source-local Cue/Uncue buttons for Advanced Scene Switcher and public OBS cue-control procedures.",
+          "Added opt-in per-source Uncue before scene transition with a persistent global master switch; both default to disabled.",
+          "Waited for outgoing outros before resuming the selected transition, including titles in shared or nested scenes, with timeout recovery.",
+          "Held Program artwork through edits and outgoing outros; added red/yellow Pending indicators scoped to the live cue row.",
+          "Preserved cue and playlist state on same-library reloads and fixed Live Text Cue double-click editing.",
+          "Added persistent collapse controls and reliable dock position, size, tab and split restoration.",
+          "Shared completed frames across Preview, Program and projectors while keeping duplicated sources independent.",
+          "Preserved scene-mask GPU caches during transforms; reduced hidden-source, audio and unnecessary compositing work.",
+          "Added off-air mask poster frames and synchronized shared-source Preview/Program playback."
         ]
       }
     }

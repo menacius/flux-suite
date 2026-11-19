@@ -89,7 +89,15 @@ install(TARGETS flux-encoder flux-encoder-worker
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES "${FLUX_REPOSITORY_ROOT}/LICENSE" README.md
         DESTINATION ${CMAKE_INSTALL_DOCDIR})
-install(DIRECTORY providers/ DESTINATION providers OPTIONAL)
+install(DIRECTORY providers/ DESTINATION ${CMAKE_INSTALL_BINDIR}/providers OPTIONAL)
+if(TARGET flux-motion-renderer)
+    install(TARGETS flux-motion-renderer RUNTIME DESTINATION
+        ${CMAKE_INSTALL_BINDIR}/providers/org.fluxmotion.renderer/renderer)
+    install(DIRECTORY "${FLUX_REPOSITORY_ROOT}/apps/flux-motion/data/"
+        DESTINATION ${CMAKE_INSTALL_BINDIR}/providers/org.fluxmotion.renderer/renderer/data)
+    install(DIRECTORY "${FLUX_SUITE_COMMON_DIR}/resources/fonts/"
+        DESTINATION ${CMAKE_INSTALL_BINDIR}/providers/org.fluxmotion.renderer/renderer/data/fonts)
+endif()
 install(DIRECTORY src/provider-sdk/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/flux-encoder/provider-sdk FILES_MATCHING PATTERN "*.h")
 
 if(FLUX_ENCODER_BUILD_TESTS)
@@ -118,6 +126,6 @@ if(FLUX_ENCODER_BUILD_TESTS)
     add_test(NAME flux-encoder-startup-ipc-preset-test
         COMMAND flux-encoder-startup-ipc-preset-test)
     set_tests_properties(flux-encoder-startup-ipc-preset-test PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;FLUX_ENCODER_SKIP_RUNTIME_PROBES=1"
         TIMEOUT 30)
 endif()

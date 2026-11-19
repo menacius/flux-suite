@@ -65,11 +65,20 @@ enum class TitleCueVisualState : int {
     Queued,
     Cued,
     Ending,
+    PendingChanges,
 };
+
+static bool title_has_pending_changes(const std::string &title_id, int row = -1)
+{
+    auto *host = fxm::editor_host::editor_host();
+    return host && host->title_has_pending_program_changes(title_id, row);
+}
 
 static TitleCueVisualState title_cue_visual_state(const Title &title,
                                                   bool waiting_for_prerender = false)
 {
+    if (title_has_pending_changes(title.id))
+        return TitleCueVisualState::PendingChanges;
     /* Outro/uncue has visual priority over every other cue condition. During
      * a cue-to-cue hand-off both current and pending rows can exist, but the
      * thumbnail must remain yellow until the outgoing row actually finishes. */
@@ -86,6 +95,9 @@ static TitleCueVisualState title_cue_visual_state(const Title &title,
 static QColor title_cue_visual_color(TitleCueVisualState state)
 {
     switch (state) {
+    case TitleCueVisualState::PendingChanges:
+        return (QDateTime::currentMSecsSinceEpoch() / 500) % 2 == 0
+            ? QColor(230, 55, 55) : live_cue_state_color(false, false, true);
     case TitleCueVisualState::Ending:
         return live_cue_state_color(false, false, true);
     case TitleCueVisualState::Cued:
@@ -325,6 +337,34 @@ static void apply_live_cue_layer_value(
     rich_text_document_replace_text(target->rich_text, target->text_content, insertion_format,
                                         target->rich_text.has_typing_format
                                             ? target->rich_text.typing_format_mask : 0);
+}
+
+static void refresh_active_live_text_row_without_recue(
+    const std::shared_ptr<Title> &title)
+{
+    if (!title || title->current_cue_row < 0)
+        return;
+    auto exposed = exposed_text_layers(title);
+    normalize_live_text_rows(title, exposed);
+    const int cue_row = title->current_cue_row;
+    if (cue_row >= static_cast<int>(title->live_text_rows.size()))
+        return;
+    for (int col = 0; col < static_cast<int>(exposed.size()); ++col) {
+        const auto &target = exposed[col];
+        if (!target)
+            continue;
+        const int value_row = target->exposed_single_value ? 0 : cue_row;
+        if (value_row < 0 ||
+            value_row >= static_cast<int>(title->live_text_rows.size()) ||
+            col >= static_cast<int>(title->live_text_rows[value_row].size()))
+            continue;
+        apply_live_text_runtime_binding(*title, value_row, *target);
+        apply_live_cue_layer_value(
+            *title, target, cue_row,
+            effective_live_text_cue_value(
+                *title, value_row, *target,
+                title->live_text_rows[value_row][col]));
+    }
 }
 
 static QString live_cue_image_file_name(const QString &path)
@@ -982,70 +1022,7 @@ static void set_bold_label(QLabel *label)
 }
 
 
-class LiveTextCueField : public QPlainTextEdit {
-public:
-    explicit LiveTextCueField(const QString &text, QWidget *parent = nullptr)
-        : QPlainTextEdit(parent)
-    {
-        setPlainText(text);
-        update_tooltip(text);
-        setLineWrapMode(QPlainTextEdit::WidgetWidth);
-        setWordWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        setTabChangesFocus(true);
-        document()->setDocumentMargin(0.0);
-        setFrameShape(QFrame::NoFrame);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        connect(this, &QPlainTextEdit::textChanged, this, [this]() {
-            update_tooltip(toPlainText());
-        });
-    }
 
-    void update_tooltip(const QString &text)
-    {
-        setToolTip(text);
-        if (viewport())
-            viewport()->setToolTip(text);
-    }
-
-    std::function<void(const QString &)> editing_finished;
-    std::function<void(bool)> focus_changed;
-
-protected:
-    void focusInEvent(QFocusEvent *event) override
-    {
-        QPlainTextEdit::focusInEvent(event);
-        if (focus_changed)
-            focus_changed(true);
-    }
-
-    void keyPressEvent(QKeyEvent *event) override
-    {
-        if (event && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) &&
-            !event->modifiers().testFlag(Qt::ShiftModifier)) {
-            if (editing_finished)
-                editing_finished(toPlainText());
-            focusNextChild();
-            event->accept();
-            return;
-        }
-
-        // A literal newline is intentionally available only through Shift+Enter.
-        QPlainTextEdit::keyPressEvent(event);
-    }
-
-    void focusOutEvent(QFocusEvent *event) override
-    {
-        QPlainTextEdit::focusOutEvent(event);
-        if (editing_finished)
-            editing_finished(toPlainText());
-        if (focus_changed) {
-            const auto callback = focus_changed;
-            QTimer::singleShot(0, qApp, [callback]() { callback(false); });
-        }
-    }
-};
 
 class LiveImageCueField : public QWidget {
 public:

@@ -241,6 +241,7 @@ private:
     bool          template_icon_view_ = false;
     bool          visibility_filter_active_ = false;
     bool          titles_collapsed_ = false;
+    QAction      *act_titles_collapsed_ = nullptr;
     int           titles_expanded_width_ = 360;
     int           titles_expanded_splitter_size_ = 240;
     Qt::DockWidgetArea stored_dock_area_ = Qt::LeftDockWidgetArea;
@@ -248,6 +249,9 @@ private:
         host_event_subscription_;
     std::unique_ptr<fxm::editor_host::IProgramCommandSubscription>
         program_command_subscription_;
+    QTimer       *host_state_refresh_timer_ = nullptr;
+    QTimer       *host_state_settle_timer_ = nullptr;
+    bool          host_preview_route_refresh_pending_ = false;
     std::map<int, QByteArray> live_text_header_states_;
     QTimer       *live_refresh_timer_ = nullptr;
     QTimer       *playlist_timer_ = nullptr;

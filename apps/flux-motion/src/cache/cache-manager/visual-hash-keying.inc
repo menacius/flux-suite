@@ -281,10 +281,8 @@ static quint64 available_system_memory_bytes()
 DiskFrameCache::DiskFrameCache(QObject *parent) : QObject(parent)
 {
     cache_dir_ = TitlePreferences::cache_disk_location();
+    cache_dir_snapshot_ = cache_dir_;
     QDir().mkpath(cache_dir_);
-    rebuildIndex();
-    bytes_used_ = scanBytesUsed();
-    publishBytesUsedLocked();
     const QFileInfo active_info(cache_dir_);
     QDir cache_parent(active_info.absolutePath());
     const QString obsolete_pattern =
@@ -293,9 +291,13 @@ DiskFrameCache::DiskFrameCache(QObject *parent) : QObject(parent)
              QStringList() << obsolete_pattern,
              QDir::Dirs | QDir::NoDotAndDotDot))
         cleanup_queue_.push_back(obsolete.absoluteFilePath());
+    /* A cache can contain many thousands of frame/tile files. Validating its
+     * manifest synchronously here blocked creation of the first Flux source —
+     * and therefore OBS scene-collection startup — for several seconds. The
+     * owned disk worker restores the index before consuming queued writes;
+     * realtime readers simply report a cache miss until it is ready. */
+    writer_active_ = true;
     writer_thread_ = std::thread(&DiskFrameCache::writerLoop, this);
-    if (!cleanup_queue_.empty())
-        writer_cv_.notify_one();
 }
 
 DiskFrameCache::~DiskFrameCache()
@@ -434,6 +436,20 @@ void DiskFrameCache::cancelQueuedWrites()
 
 void DiskFrameCache::writerLoop()
 {
+    {
+        QMutexLocker cache_lock(&mutex_);
+        rebuildIndex();
+        bytes_used_ = scanBytesUsed();
+        publishBytesUsedLocked();
+    }
+    index_ready_.store(true, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(writer_mutex_);
+        writer_active_ = false;
+        if (writer_queue_.empty() && cleanup_queue_.empty())
+            writer_idle_cv_.notify_all();
+    }
+
     for (;;) {
         WriteJob job;
         QString cleanup_dir;
@@ -503,6 +519,8 @@ QString DiskFrameCache::pathForTileDigest(const QByteArray &digest) const
 
 bool DiskFrameCache::contains(const CacheFrameKey &key) const
 {
+    if (!index_ready_.load(std::memory_order_acquire))
+        return false;
     /* Membership has its own short-lived read lock. Disk compression, manifest
      * writes and tile I/O continue under mutex_, but realtime/UI callers never
      * wait behind those operations merely to ask whether a key exists. */
@@ -663,6 +681,8 @@ bool DiskFrameCache::readTileLocked(const TileRef &ref, QImage &image) const
 
 bool DiskFrameCache::get(const CacheFrameKey &key, QImage &image) const
 {
+    if (!index_ready_.load(std::memory_order_acquire))
+        return false;
     QMutexLocker lock(&mutex_);
     if (!indexed_keys_.contains(key.toString()))
         return false;
@@ -972,6 +992,8 @@ bool DiskFrameCache::aliasLocked(
 
 QVector<CacheFrameKey> DiskFrameCache::keysForTitle(const QString &title_id) const
 {
+    if (!index_ready_.load(std::memory_order_acquire))
+        return {};
     QMutexLocker lock(&mutex_);
     QVector<CacheFrameKey> keys;
     keys.reserve(indexed_keys_.size());
@@ -1073,10 +1095,16 @@ void DiskFrameCache::setCacheDirectory(const QString &path)
     if (clean.isEmpty() || clean == cache_dir_)
         return;
     cache_dir_ = clean;
+    {
+        QWriteLocker location_lock(&location_mutex_);
+        cache_dir_snapshot_ = clean;
+    }
     QDir().mkpath(cache_dir_);
+    index_ready_.store(false, std::memory_order_release);
     rebuildIndex();
     bytes_used_ = scanBytesUsed();
     publishBytesUsedLocked();
+    index_ready_.store(true, std::memory_order_release);
     FXM_LOG_INFO("DiskCache", QStringLiteral(
         "Set disk cache directory=%1 indexedFrames=%2 bytes=%3")
         .arg(cache_dir_)
@@ -1086,8 +1114,8 @@ void DiskFrameCache::setCacheDirectory(const QString &path)
 
 QString DiskFrameCache::cacheDirectory() const
 {
-    QMutexLocker lock(&mutex_);
-    return cache_dir_;
+    QReadLocker lock(&location_mutex_);
+    return cache_dir_snapshot_;
 }
 
 quint64 DiskFrameCache::bytesUsed() const

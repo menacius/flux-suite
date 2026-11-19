@@ -831,6 +831,7 @@ static void rich_text_document_sync_layer_mirrors_impl(
     const RichTextStroke &stroke = f.stroke;
     layer.outline_enabled = stroke.enabled && stroke.width > 0.0f;
     layer.stroke_width = stroke.width;
+    layer.stroke_width_prop.static_value = stroke.width;
     layer.outline_opacity = stroke.opacity;
     layer.outline_on_front = stroke.on_front;
     layer.outline_alignment = stroke.alignment;

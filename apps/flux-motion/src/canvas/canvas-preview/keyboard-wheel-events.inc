@@ -1245,16 +1245,33 @@ void CanvasPreview::paintEvent(QPaintEvent *)
         record_live_playback_present();
     return;
 #else
+    if (!gpu_display_ || !gpu_display_->native_presentation_supported) {
+        const bool playback_present = transport_playback_active_ &&
+            playback_frame_pending_;
+        if (dirty_)
+            render_to_frame();
+        if (gpu_render_session_)
+            frame_image_ =
+                title_gpu_render_session_readback(gpu_render_session_);
+        QPainter painter(this);
+        paint_canvas(painter, CanvasPaintPass::All);
+        if (playback_present)
+            record_live_playback_present();
+        return;
+    }
+
     /* Create the editor swapchain before a dirty render is allowed to queue its
      * first-use shader compilation. gs_effect_create() owns OBS' global graphics
      * context while the driver compiles; attempting gs_swapchain_create() after
      * that point blocks this UI thread for the complete compile duration. */
+    const bool frame_was_dirty = dirty_;
     const bool gpu_display_ready = ensure_gpu_display();
     if (gpu_display_ready) {
         /* Artwork is presented through the editor-owned OBS GPU swap chain, so
          * underlay/overlay QImage cache changes are not a prerequisite for
          * rendering a dirty GPU frame. */
         render_dirty_frame_if_due();
+        const bool artwork_prepared = frame_was_dirty && !dirty_;
         const qreal dpr = std::max<qreal>(1.0, devicePixelRatioF());
         const QSize pixel_size(std::max(1, qRound(width() * dpr)),
                                std::max(1, qRound(height() * dpr)));
@@ -1342,6 +1359,8 @@ void CanvasPreview::paintEvent(QPaintEvent *)
             gpu_shader_compile_overlay_key_ != shader_compile_key ||
             gpu_overlay_cache_.size() != pixel_size ||
             std::abs(gpu_overlay_cache_.devicePixelRatio() - dpr) > 0.001;
+        if (artwork_prepared || update_underlay || update_overlay)
+            editing_present_pending_ = true;
         if (shader_compile_visible) {
             gpu_overlay_cache_ = QImage();
             gpu_overlay_dirty_ = false;

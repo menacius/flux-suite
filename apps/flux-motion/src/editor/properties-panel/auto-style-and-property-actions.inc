@@ -6,7 +6,7 @@
             });
     connect(spn_appearance_stroke_width_, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
             this, [this, can_edit, text_edit_active, apply_text_char_format,
-                   current_text_char_format, emit_change](double v) {
+                   current_text_char_format, local_time, emit_change](double v) {
                 if (!can_edit()) return;
                 const bool text_like = layer_->type == LayerType::Text ||
                                        layer_->type == LayerType::Clock ||
@@ -20,7 +20,10 @@
                     apply_text_char_format(fmt, RichTextCharStroke);
                 } else {
                     layer_->stroke_width = (float)v;
-                    layer_->outline_enabled = v > 0.0 && layer_->stroke_fill_type != 0;
+                    set_animated_value(layer_->stroke_width_prop, local_time(), v);
+                    layer_->outline_enabled =
+                        (v > 0.0 || layer_->stroke_width_prop.is_animated()) &&
+                        layer_->stroke_fill_type != 0;
                 }
                 emit_change();
             });
@@ -51,7 +54,7 @@
             return sy;
         return 1.0;
     };
-    auto apply_shape_size_metric_scaling = [this, shape_resize_factor](double old_w, double old_h, double new_w, double new_h) {
+    auto apply_shape_size_metric_scaling = [this, shape_resize_factor, local_time](double old_w, double old_h, double new_w, double new_h) {
         if (!layer_ || !layer_type_uses_shape_geometry(layer_->type))
             return;
         const double factor = shape_resize_factor(old_w, old_h, new_w, new_h);
@@ -63,6 +66,7 @@
             layer_->stroke_fill_type != 0 &&
             layer_->stroke_width > 0.0f) {
             layer_->stroke_width = (float)std::clamp((double)layer_->stroke_width * factor, 0.0, 512.0);
+            set_animated_value(layer_->stroke_width_prop, local_time(), layer_->stroke_width);
             if (spn_appearance_stroke_width_) {
                 QSignalBlocker block(spn_appearance_stroke_width_);
                 spn_appearance_stroke_width_->setValue(layer_->stroke_width);

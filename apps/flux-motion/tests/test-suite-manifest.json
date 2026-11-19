@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "development_version": 420,
+  "development_version": 430,
   "default_timeout_seconds": 90,
   "required_areas": [
     "editor_gui",
@@ -17,6 +17,8 @@
   "areas": {
     "editor_gui": {
       "python": [
+        "tests/development_version_422_scene_mask_dock_contract_test.py",
+        "tests/dock_focus_scene_mask_preview_contract_test.py",
         "tests/development_version_417_multi_title_project_contract_test.py",
         "tests/development_version_415_flux_encoder_preference_contract_test.py",
         "tests/development_version_414_flux_encoder_export_contract_test.py",
@@ -126,7 +128,11 @@
       "native": [
         "editor_ui_revision_140_contract_test",
         "canvas_refresh_pacing_contract_test",
-        "canvas_scaling_manipulation_contract_test"
+        "canvas_scaling_manipulation_contract_test",
+        "scene_mask_dock_ui_test",
+        "live_text_cue_field_ui_test",
+        "source_settings_buttons_ui_test",
+        "transition_cue_gate_integration_test"
       ]
     },
     "timeline_graph": {
@@ -279,11 +285,13 @@
       "native": [
         "layer_3d_transform_contract_test",
         "gpu_mask_contract_test",
+          "source_frame_reuse_integration_test",
         "gpu_prerender_phase14_contract_test"
       ]
     },
     "cache_proxy_threading": {
       "python": [
+        "tests/obs_startup_async_disk_cache_index_contract_test.py",
         "tests/development_version_399_close_point_text_shadow_projection_contract_test.py",
         "tests/development_version_398_planar_shadow_text_continuity_contract_test.py",
         "tests/development_version_397_text_shadow_source_size_contract_test.py",
@@ -355,6 +363,8 @@
     },
     "persistence_cueing": {
       "python": [
+        "tests/dock_focus_scene_mask_preview_contract_test.py",
+        "tests/obs_deferred_title_restore_activation_contract_test.py",
         "tests/development_version_399_close_point_text_shadow_projection_contract_test.py",
         "tests/development_version_398_planar_shadow_text_continuity_contract_test.py",
         "tests/development_version_397_text_shadow_source_size_contract_test.py",
@@ -376,7 +386,11 @@
       "native": [
         "cue_ending_visual_contract_test",
         "uncue_playback_snapshot_contract_test",
-        "live_text_cue_utils_test"
+        "live_text_cue_utils_test",
+        "scene_mask_dock_ui_test",
+        "live_text_cue_field_ui_test",
+        "source_settings_buttons_ui_test",
+        "transition_cue_gate_integration_test"
       ]
     },
     "external_data": {

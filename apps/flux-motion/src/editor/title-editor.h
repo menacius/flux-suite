@@ -78,6 +78,10 @@ class QCloseEvent;
 class QShowEvent;
 class QAction;
 class QToolButton;
+
+namespace fxm::video {
+struct MediaInfo;
+}
 class QScrollBar;
 class QMenuBar;
 class QMenu;
@@ -309,6 +313,12 @@ private:
     void create_image_layer_from_canvas(const QPointF &canvas_pt);
     void choose_image_file_for_layer(const std::string &layer_id);
     void create_image_layer_from_external_source(const QString &image_path, const QPointF &canvas_pt);
+    bool create_media_layer_from_external_source(const QString &media_path,
+                                                 LayerType type,
+                                                 const QPointF &canvas_pt,
+                                                 const fxm::video::MediaInfo *probed_media = nullptr);
+    bool import_external_file_at(const QString &path, const QPointF &canvas_pt,
+                                 bool show_errors = true);
     void create_text_layer_from_external_source(const QString &text, const QPointF &canvas_pt);
     void insert_asset_layer(const std::string &asset_id, const QPointF &canvas_pt);
     void edit_asset(const std::string &asset_id);

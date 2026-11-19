@@ -166,11 +166,25 @@ public:
     }
 
 private:
-    static void source_event(void *data, calldata_t *)
+    static void source_event(void *data, calldata_t *event_data)
     {
         auto *self = static_cast<ObsHostEventSubscription *>(data);
-        if (self && self->handler_)
-            self->handler_(editor_host::HostEvent::SourceStateChanged);
+        if (!self || !self->handler_ || !event_data)
+            return;
+
+        /* The core signal handler is global: every OBS source in the active
+         * scene tree publishes lifecycle events here. The dock only tracks
+         * Flux Motion source bindings, so forwarding camera, media, filter and
+         * nested-scene events creates an unbounded queue of redundant Qt
+         * refreshes during a scene switch. Inspect the borrowed signal source
+         * without retaining it and ignore unrelated source types. */
+        auto *source = static_cast<obs_source_t *>(
+            calldata_ptr(event_data, "source"));
+        const char *source_id = source ? obs_source_get_id(source) : nullptr;
+        if (!source_id || std::strcmp(source_id, kTitleSourceId) != 0)
+            return;
+
+        self->handler_(editor_host::HostEvent::SourceStateChanged);
     }
 
     static void frontend_event(obs_frontend_event event, void *data)
@@ -561,6 +575,11 @@ ObsEditorHost::title_sources() const
     return result;
 }
 
+bool ObsEditorHost::title_has_pending_program_changes(const std::string &title_id, int row) const
+{
+    return title_source_has_pending_program_changes(title_id, row);
+}
+
 int ObsEditorHost::remove_title_sources(
     const std::vector<std::string> &title_ids)
 {
@@ -625,6 +644,15 @@ bool ObsEditorHost::open_title_in_editor(
     const std::string &title_id, std::string *error)
 {
     return launch_standalone_editor(&title_id, false, error);
+}
+
+bool ObsEditorHost::uncue_before_scene_transition() const
+{
+    return fxm::obs_plugin::uncue_before_scene_transition();
+}
+void ObsEditorHost::set_uncue_before_scene_transition(bool enabled)
+{
+    fxm::obs_plugin::set_uncue_before_scene_transition(enabled);
 }
 
 bool ObsEditorHost::open_editor_preferences(std::string *error)

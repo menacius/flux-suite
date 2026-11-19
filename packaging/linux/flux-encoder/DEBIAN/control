@@ -1,0 +1,9 @@
+Package: flux-encoder
+Version: 0.8.19-3
+Section: video
+Priority: optional
+Architecture: amd64
+Maintainer: Flux Suite
+Depends: libc6, libgcc-s1, libstdc++6, libqt6core6t64 (>= 6.5), libqt6gui6 (>= 6.5), libqt6widgets6 (>= 6.5), libqt6network6 (>= 6.5), libqt6sql6 (>= 6.5), libqt6sql6-sqlite, libobs0t64 (>= 30), libavcodec62, libavformat62, libavutil60, libswscale9, libswresample6, libcairo2, libpango-1.0-0, libpangocairo-1.0-0, liblz4-1, ffmpeg
+Description: Flux Encoder media encoding application
+ Provides queued media encoding and the bundled Flux Motion rendering provider.

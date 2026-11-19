@@ -14,7 +14,7 @@ endfunction()
 
 function(flux_extract_semver version_label output_variable)
   string(REGEX MATCH
-      "v([0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?)"
+      "v\\.?([0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?)"
       version_match "${version_label}")
   if(NOT version_match)
     message(FATAL_ERROR "Version label has no semantic version: ${version_label}")

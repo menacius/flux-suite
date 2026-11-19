@@ -252,9 +252,47 @@ int render_video(const std::shared_ptr<Title> &title, double requested_fps,
         const double time = std::min(
             title->duration, start + static_cast<double>(index) / fps);
         QImage frame;
-        for (int attempt = 0; attempt < 200; ++attempt) {
+        const auto frame_deadline = std::chrono::steady_clock::now() +
+            std::chrono::seconds(90);
+        while (std::chrono::steady_clock::now() < frame_deadline) {
+            /* Do not contend with the background shader compiler for libobs'
+             * global graphics context. This is particularly important for
+             * D3D11, where repeatedly entering readback while a first-use
+             * effect is compiling can turn startup into a long busy loop. */
+            TitleGpuShaderCompileStatus compile_status;
+            if (title_gpu_render_session_shader_compile_status(
+                    session.get(), compile_status) &&
+                (compile_status.active || compile_status.queued)) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+                QThread::msleep(5);
+                continue;
+            }
             frame = frame_at(time);
-            if (!frame.isNull() && frame.size() == QSize(width, height))
+            TitleGpuRenderDiagnostics diagnostics;
+            const bool have_diagnostics =
+                title_gpu_render_session_get_diagnostics(
+                    session.get(), diagnostics);
+            compile_status = {};
+            const bool compiling =
+                title_gpu_render_session_shader_compile_status(
+                    session.get(), compile_status) &&
+                (compile_status.active || compile_status.queued);
+            const double frame_tolerance =
+                std::max(1.0e-6, 0.5 / fps);
+            const bool published_requested_frame = have_diagnostics &&
+                diagnostics.valid && diagnostics.has_published_frame &&
+                !diagnostics.last_draw_deferred &&
+                !diagnostics.frame_dirty &&
+                !diagnostics.state_transaction_pending && !compiling &&
+                diagnostics.published_model_revision == 1 &&
+                std::abs(diagnostics.last_published_time - time) <=
+                    frame_tolerance;
+            /* A readback target has its final dimensions as soon as it is
+             * allocated. During asynchronous first-use shader compilation its
+             * contents may still be the cleared (black/transparent) surface.
+             * Do not export that placeholder, or a stale prior-time surface. */
+            if (!frame.isNull() && frame.size() == QSize(width, height) &&
+                published_requested_frame)
                 break;
             QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
             QThread::msleep(5);

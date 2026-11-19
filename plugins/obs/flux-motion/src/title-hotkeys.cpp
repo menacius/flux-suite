@@ -9,6 +9,13 @@
 #include "title-logger.h"
 #include <obs-module.h>
 #include <QSettings>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSaveFile>
 #include <QTimer>
 #include <QSet>
 #include <QString>
@@ -70,6 +77,8 @@ std::map<std::string, std::string> g_persisted_hotkey_bindings;
 bool g_hotkeys_active = false;
 uint64_t g_change_callback_id = 0;
 bool g_hotkey_section_source_registered = false;
+bool g_hotkey_signal_connected = false;
+bool g_hotkey_save_pending = false;
 QSet<QString> g_pending_cue_hydration;
 TitleProgramHotkeyHandler g_program_command_handler;
 std::map<std::string, int> g_last_cued_rows;
@@ -79,6 +88,17 @@ constexpr const char *kDockSettingsGroup = "TitleDock";
 constexpr const char *kBackgroundPersistenceKey = "backgroundPersistence";
 constexpr const char *kTextPersistenceKey = "textPersistence";
 constexpr const char *kHotkeySettingsGroup = "Hotkeys";
+constexpr const char *kHotkeyBackupFile = "dock-hotkeys.json";
+
+static QString hotkey_backup_path()
+{
+    char *path = obs_module_config_path(kHotkeyBackupFile);
+    if (!path)
+        return {};
+    const QString result = QString::fromUtf8(path);
+    bfree(path);
+    return result;
+}
 
 static void load_persisted_hotkey_bindings()
 {
@@ -88,6 +108,22 @@ static void load_persisted_hotkey_bindings()
     for (const auto &key : settings.childKeys())
         g_persisted_hotkey_bindings[key.toStdString()] = settings.value(key).toString().toStdString();
     settings.endGroup();
+
+    /* Keep a plugin-config copy as well as the legacy QSettings copy. OBS
+     * plugin updates replace binaries/data but preserve this directory, so a
+     * package or installer migration cannot silently discard operator-defined
+     * dock shortcuts. */
+    QFile file(hotkey_backup_path());
+    if (file.open(QIODevice::ReadOnly)) {
+        const QJsonObject bindings =
+            QJsonDocument::fromJson(file.readAll()).object().value(
+                QStringLiteral("bindings")).toObject();
+        for (auto it = bindings.begin(); it != bindings.end(); ++it) {
+            if (it.value().isString())
+                g_persisted_hotkey_bindings[it.key().toStdString()] =
+                    it.value().toString().toStdString();
+        }
+    }
 }
 
 static void save_persisted_hotkey_bindings()
@@ -98,6 +134,23 @@ static void save_persisted_hotkey_bindings()
     for (const auto &[name, json] : g_persisted_hotkey_bindings)
         settings.setValue(QString::fromStdString(name), QString::fromStdString(json));
     settings.endGroup();
+    settings.sync();
+
+    QJsonObject bindings;
+    for (const auto &[name, json] : g_persisted_hotkey_bindings)
+        bindings.insert(QString::fromStdString(name), QString::fromStdString(json));
+    QJsonObject root;
+    root.insert(QStringLiteral("schemaVersion"), 1);
+    root.insert(QStringLiteral("bindings"), bindings);
+    const QString path = hotkey_backup_path();
+    if (!path.isEmpty()) {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QSaveFile file(path);
+        if (file.open(QIODevice::WriteOnly)) {
+            file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+            file.commit();
+        }
+    }
 }
 
 static void remember_hotkey_binding(const HotkeyRegistration &hotkey)
@@ -114,6 +167,34 @@ static void remember_hotkey_binding(const HotkeyRegistration &hotkey)
 
     obs_data_release(wrapper);
     obs_data_array_release(bindings);
+}
+
+static void hotkey_bindings_changed(void *, calldata_t *calldata)
+{
+    auto *key = static_cast<obs_hotkey_t *>(calldata_ptr(calldata, "key"));
+    if (!key)
+        return;
+    const obs_hotkey_id changed_id = obs_hotkey_get_id(key);
+    const auto it = std::find_if(
+        g_hotkeys.begin(), g_hotkeys.end(),
+        [changed_id](const HotkeyRegistration &registration) {
+            return registration.id == changed_id;
+        });
+    if (it == g_hotkeys.end())
+        return;
+    /* libobs emits this signal while its hotkey mutex is held. Defer the
+     * snapshot so obs_hotkey_save() cannot recursively acquire that lock. */
+    if (g_hotkey_save_pending)
+        return;
+    g_hotkey_save_pending = true;
+    QTimer::singleShot(0, QCoreApplication::instance(), []() {
+        g_hotkey_save_pending = false;
+        if (!g_hotkeys_active)
+            return;
+        for (const auto &hotkey : g_hotkeys)
+            remember_hotkey_binding(hotkey);
+        save_persisted_hotkey_bindings();
+    });
 }
 
 static void restore_hotkey_binding(const HotkeyRegistration &hotkey)
@@ -616,10 +697,8 @@ static std::string descriptor_signature(const std::vector<HotkeyDescriptor> &des
 static void unregister_all_hotkeys()
 {
     for (auto &hotkey : g_hotkeys) {
-        if (hotkey.id != OBS_INVALID_HOTKEY_ID) {
-            remember_hotkey_binding(hotkey);
+        if (hotkey.id != OBS_INVALID_HOTKEY_ID)
             obs_hotkey_unregister(hotkey.id);
-        }
     }
     save_persisted_hotkey_bindings();
     g_hotkeys.clear();
@@ -701,6 +780,12 @@ void title_hotkeys_register()
     if (g_hotkeys_active) return;
     register_hotkey_section_source_type();
     load_persisted_hotkey_bindings();
+    if (!g_hotkey_signal_connected) {
+        signal_handler_connect(obs_get_signal_handler(),
+                               "hotkey_bindings_changed",
+                               hotkey_bindings_changed, nullptr);
+        g_hotkey_signal_connected = true;
+    }
     g_hotkeys_active = true;
     refresh_hotkeys();
     if (g_change_callback_id == 0)
@@ -712,6 +797,12 @@ void title_hotkeys_unregister()
     g_hotkeys_active = false;
     TitleDataStore::instance().remove_change_callback(g_change_callback_id);
     g_change_callback_id = 0;
+    if (g_hotkey_signal_connected) {
+        signal_handler_disconnect(obs_get_signal_handler(),
+                                  "hotkey_bindings_changed",
+                                  hotkey_bindings_changed, nullptr);
+        g_hotkey_signal_connected = false;
+    }
     unregister_all_hotkeys();
     release_hotkey_section_sources();
 }

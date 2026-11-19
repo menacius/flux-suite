@@ -51,8 +51,10 @@
                 session, session->title, layer, session->time);
             if (!coverage)
                 continue;
+            gs_texture_t *motion_adjusted = apply_gpu_adjustment_motion_blur(
+                session, layer, session->time, frame);
             gs_texture_t *adjusted = apply_gpu_layer_effect_stack(
-                session, layer, layer_time, frame, width, height,
+                session, layer, layer_time, motion_adjusted, width, height,
                 nullptr, false, frame, true);
             if (adjusted && adjusted != frame) {
                 gs_texrender_t *next = current_is_a ? session->frame_b
@@ -523,6 +525,11 @@ void title_gpu_render_session_destroy(TitleGpuRenderSession *session)
     destroy_target(session->blur_b);
     destroy_target(session->motion_sample_target);
     destroy_target(session->motion_accum_target);
+    for (auto &entry : session->adjustment_motion_history) {
+        for (gs_texrender_t *&target : entry.second.frames)
+            destroy_target(target);
+    }
+    session->adjustment_motion_history.clear();
     session->external_background_local.reset();
     session->external_background_snapshot_resource.reset();
     session->external_background_snapshot = nullptr;
@@ -954,6 +961,18 @@ void title_gpu_render_session_update_range(TitleGpuRenderSession *session,
             key += session->transition_input_preview_enabled
                 ? "|transition-input-preview=1"
                 : "|transition-input-preview=0";
+        /* Non-scaling outlines are rasterized at the inverse of the current
+         * local transform scale. Scale changes therefore change the artwork
+         * identity even though fill-only layers remain transform-neutral. */
+        if (layer.outline_enabled && !layer.scale_stroke_with_shape &&
+            (layer_type_uses_shape_geometry(layer.type) ||
+             layer_type_is_image_like(layer.type)) &&
+            layer.stroke_fill_type != 0) {
+            const auto local_scale = layer.scale.evaluate(base_local_time);
+            key += "|non-scaling-outline=" +
+                std::to_string(local_scale.x) + ',' +
+                std::to_string(local_scale.y);
+        }
         if (layer.use_as_scene_mask)
             key += session->scene_mask_placeholder_preview_enabled
                 ? "|scene-mask-placeholder-preview=1"

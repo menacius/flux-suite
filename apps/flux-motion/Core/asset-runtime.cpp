@@ -354,6 +354,7 @@ bool layer_has_timeline_animation(const Layer &layer)
            layer.stroke_color_r.is_animated() ||
            layer.stroke_color_g.is_animated() ||
            layer.stroke_color_b.is_animated() ||
+           layer.stroke_width_prop.is_animated() ||
            layer.stroke_offset_prop.is_animated() ||
            layer.chart_animation_progress.is_animated() ||
            layer.chart_reveal_progress.is_animated() ||
@@ -413,6 +414,7 @@ bool layer_has_raster_animation(const Layer &layer)
            layer.stroke_color_r.is_animated() ||
            layer.stroke_color_g.is_animated() ||
            layer.stroke_color_b.is_animated() ||
+           layer.stroke_width_prop.is_animated() ||
            layer.stroke_offset_prop.is_animated() ||
            layer.chart_animation_progress.is_animated() ||
            layer.chart_reveal_progress.is_animated() ||

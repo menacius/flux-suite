@@ -8,7 +8,10 @@
 #include <QPainter>
 #include <QSaveFile>
 #include <QSet>
+#include <QStandardPaths>
 #include <QSvgRenderer>
+#include <QProcess>
+#include <QXmlStreamWriter>
 
 #if defined(Q_OS_WIN)
 #include <qt_windows.h>
@@ -233,6 +236,61 @@ void unregisterAssociation(HKEY root, const Association &association)
 
 #endif
 
+#if !defined(Q_OS_WIN)
+QString mimePackagePath(const Product &product)
+{
+    return QDir(QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+        .filePath(QStringLiteral("mime/packages/flux-suite-") + product.id + QStringLiteral(".xml"));
+}
+
+bool registerLinuxAssociations(const Product &product,
+                               const QList<Association> &associations,
+                               QString *error)
+{
+    const QString packagePath = mimePackagePath(product);
+    if (!QDir().mkpath(QFileInfo(packagePath).absolutePath())) {
+        if (error) *error = QStringLiteral("Could not create the XDG MIME package directory.");
+        return false;
+    }
+    QSaveFile package(packagePath);
+    if (!package.open(QIODevice::WriteOnly)) {
+        if (error) *error = QStringLiteral("Could not write %1.").arg(packagePath);
+        return false;
+    }
+    QXmlStreamWriter xml(&package);
+    xml.setAutoFormatting(true);
+    xml.writeStartDocument();
+    xml.writeStartElement(QStringLiteral("mime-info"));
+    xml.writeDefaultNamespace(QStringLiteral("http://www.freedesktop.org/standards/shared-mime-info"));
+    for (const Association &association : associations) {
+        xml.writeStartElement(QStringLiteral("mime-type"));
+        xml.writeAttribute(QStringLiteral("type"), association.mimeType);
+        xml.writeTextElement(QStringLiteral("comment"), association.description);
+        xml.writeEmptyElement(QStringLiteral("glob"));
+        xml.writeAttribute(QStringLiteral("pattern"), QStringLiteral("*") + association.extension);
+        xml.writeEndElement();
+    }
+    xml.writeEndElement();
+    xml.writeEndDocument();
+    if (!package.commit()) {
+        if (error) *error = QStringLiteral("Could not activate %1.").arg(packagePath);
+        return false;
+    }
+
+    const QString dataRoot = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    const QString updateMime = QStandardPaths::findExecutable(QStringLiteral("update-mime-database"));
+    if (!updateMime.isEmpty())
+        QProcess::execute(updateMime, {QDir(dataRoot).filePath(QStringLiteral("mime"))});
+    const QString xdgMime = QStandardPaths::findExecutable(QStringLiteral("xdg-mime"));
+    if (!xdgMime.isEmpty()) {
+        for (const Association &association : associations)
+            QProcess::execute(xdgMime, {QStringLiteral("default"),
+                product.id + QStringLiteral(".desktop"), association.mimeType});
+    }
+    return true;
+}
+#endif
+
 }
 
 namespace FileAssociations {
@@ -242,6 +300,7 @@ bool registerForProduct(const Product &product, const QString &installPath, QStr
     const QList<Association> associations = associationsFor(product);
     if (associations.isEmpty()) return true;
 
+#if defined(Q_OS_WIN)
     const QString iconDir = QDir(installPath).filePath(QStringLiteral(".flux-file-icons"));
     if (!QDir().mkpath(iconDir)) {
         if (error) *error = QStringLiteral("Could not create the file icon directory.");
@@ -254,8 +313,6 @@ bool registerForProduct(const Product &product, const QString &installPath, QStr
         if (!writeIcon(association.iconResource, iconPath, error)) return false;
         writtenIcons.insert(association.iconFileName);
     }
-
-#if defined(Q_OS_WIN)
     HKEY root = isSystemWidePath(installPath) ? HKEY_LOCAL_MACHINE : HKEY_CURRENT_USER;
     const QString executable = QDir(installPath).filePath(product.executable);
     for (const Association &association : associations) {
@@ -264,7 +321,8 @@ bool registerForProduct(const Product &product, const QString &installPath, QStr
     }
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
 #else
-    Q_UNUSED(error)
+    Q_UNUSED(installPath)
+    return registerLinuxAssociations(product, associations, error);
 #endif
     return true;
 }
@@ -278,8 +336,12 @@ void unregisterForProduct(const Product &product, const QString &installPath)
     for (const Association &association : associations) unregisterAssociation(root, association);
     SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
 #else
-    Q_UNUSED(product)
     Q_UNUSED(installPath)
+    QFile::remove(mimePackagePath(product));
+    const QString dataRoot = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    const QString updateMime = QStandardPaths::findExecutable(QStringLiteral("update-mime-database"));
+    if (!updateMime.isEmpty())
+        QProcess::execute(updateMime, {QDir(dataRoot).filePath(QStringLiteral("mime"))});
 #endif
 }
 
