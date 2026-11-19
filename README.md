@@ -5,6 +5,8 @@ runtime code, build tooling, and release infrastructure.
 
 Product page and downloads: [software.omniatv.com/flux-suite](https://software.omniatv.com/flux-suite/)
 
+Latest changelog: [Changes since v0.8.20](docs/releases/v0.8.21-alpha.md)
+
 ## Repository layout
 
 - `apps/` contains independently versioned desktop applications.

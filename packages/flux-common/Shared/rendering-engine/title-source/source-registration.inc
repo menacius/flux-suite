@@ -210,6 +210,7 @@ static void title_gpu_render_session_prepare_auxiliary_layers(
          * never converted into a CPU alpha/luma mask; all mask extraction and
          * composition happen after upload in the GPU mask graph. */
         const Layer fill_matte_layer = scene_mask_fill_matte_layer(*layer);
+        ++session->diagnostic_auxiliary_raster_builds;
         const MotionBaseRaster raster = render_gpu_layer_base_raster(
             session->title, fill_matte_layer, layer_time);
         entry.key = std::move(key);
@@ -1696,6 +1697,16 @@ static bool set_runtime_scene_mask_raster(
     return raster.texture != nullptr;
 }
 
+static SourceVideoFrameIdentity source_video_frame_identity(
+    const TitleSourceData *data, const Title &title)
+{
+    return {obs_get_video_frame_time(), data->diagnostic_tick_serial,
+            data->visual_model_revision,
+            data->render_input_revision.load(std::memory_order_relaxed),
+            data->requested_presentation_generation.load(std::memory_order_acquire),
+            data->playhead, title_has_valid_scene_mask_cue(data, title)};
+}
+
 static bool prepare_runtime_scene_mask_rasters(
     TitleSourceData *data, const Title &title, double title_time)
 {
@@ -1708,6 +1719,7 @@ static bool prepare_runtime_scene_mask_rasters(
          * an already-empty session dirty every video frame defeats final-frame
          * reuse in the opposite direction. */
         clear_runtime_scene_mask_rasters(data->gpu_render_session);
+        data->scene_mask_capture_ready = false;
         return false;
     }
     if (data->active_scene_mask_scenes.empty() &&
@@ -1715,6 +1727,53 @@ static bool prepare_runtime_scene_mask_rasters(
         activate_scene_mask_scenes(data);
     if (data->active_scene_mask_scenes.empty())
         return false;
+
+    const SourceVideoFrameIdentity identity = source_video_frame_identity(data, title);
+    if (data->scene_mask_capture_ready &&
+        data->scene_mask_capture_identity == identity)
+        return true;
+    data->scene_mask_capture_ready = false;
+
+    for (auto it = data->scene_mask_scene_texrenders.begin();
+         it != data->scene_mask_scene_texrenders.end();) {
+        const Layer *layer = find_layer_by_id(title, it->first);
+        if (layer && layer->use_as_scene_mask) {
+            ++it;
+            continue;
+        }
+        if (it->second)
+            gs_texrender_destroy(it->second);
+        data->legacy_scene_capture_identities.erase(it->first);
+        it = data->scene_mask_scene_texrenders.erase(it);
+    }
+
+    /* The auxiliary helper retires rasters outside its requested set. Prepare
+     * the complete set once, otherwise each mask evicts every other matte.
+     * Decide the legacy path before doing any captures that it would discard. */
+    std::vector<std::string> mask_layer_ids;
+    bool planar_eligible = true;
+    for (const auto &layer : title.layers) {
+        if (!layer || !layer->use_as_scene_mask ||
+            !layer_type_can_be_scene_mask(layer->type) ||
+            !gpu_layer_chain_visible(title, *layer, title_time))
+            continue;
+        const auto *cfg = scene_mask_config_for_layer(*data, layer->id);
+        if (!cfg || cfg->scene_name.empty() || !cfg->move_with_mask ||
+            !active_scene_mask_source_for_name(*data, cfg->scene_name))
+            planar_eligible = false;
+        mask_layer_ids.push_back(layer->id);
+    }
+    if (mask_layer_ids.empty()) {
+        clear_runtime_scene_mask_rasters(data->gpu_render_session);
+        return false;
+    }
+    title_gpu_render_session_prepare_auxiliary_layers(
+        data->gpu_render_session, title, title_time,
+        data->visual_model_revision, mask_layer_ids);
+    if (!planar_eligible) {
+        clear_runtime_scene_mask_rasters(data->gpu_render_session);
+        return false;
+    }
 
     std::size_t expected = 0;
     std::size_t prepared = 0;
@@ -1737,9 +1796,6 @@ static bool prepare_runtime_scene_mask_rasters(
         if (!scene)
             continue;
 
-        title_gpu_render_session_prepare_auxiliary_layers(
-            data->gpu_render_session, title, title_time,
-            data->visual_model_revision, {layer->id});
         const double local_time = std::max(0.0, title_time - layer->in_time);
         const double box_width = eval_box_width(*layer, local_time);
         const double box_height = eval_box_height(*layer, local_time);
@@ -1779,6 +1835,7 @@ static bool prepare_runtime_scene_mask_rasters(
                               static_cast<float>(capture_scale_y), 1.0f);
         }
         auto hidden = hide_scene_mask_source_items(scene, data->source);
+        ++data->diagnostic_scene_capture_count;
         obs_source_video_render(scene);
         restore_scene_mask_source_items(hidden);
         gs_matrix_pop();
@@ -1807,11 +1864,16 @@ static bool prepare_runtime_scene_mask_rasters(
             it = rasters.erase(it);
         }
     }
+    data->scene_mask_capture_identity = identity;
+    data->scene_mask_capture_ready = true;
     return true;
 }
 
-static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, double title_time)
+static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, double title_time,
+                                   bool *complete = nullptr)
 {
+    if (complete)
+        *complete = false;
     if (!data || data->scene_masks.empty() ||
         !title_has_valid_scene_mask_cue(data, title))
         return;
@@ -1822,14 +1884,14 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
     if (data->active_scene_mask_scenes.empty())
         return;
 
-    if (!data->scene_mask_scene_texrender)
-        data->scene_mask_scene_texrender = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
     if (!data->scene_mask_matted_texrender)
         data->scene_mask_matted_texrender = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
-    if (!data->scene_mask_scene_texrender || !data->scene_mask_matted_texrender ||
+    if (!data->scene_mask_matted_texrender ||
         !scene_mask_effect_for_data(data, data->gpu_render_session))
         return;
 
+    std::size_t expected = 0;
+    std::size_t rendered = 0;
     for (std::size_t layer_index = 0; layer_index < title.layers.size(); ++layer_index) {
         const auto &layer_ptr = title.layers[layer_index];
         const Layer *layer = layer_ptr.get();
@@ -1839,6 +1901,7 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
         const auto *cfg = scene_mask_config_for_layer(*data, layer->id);
         if (!cfg || cfg->scene_name.empty())
             continue;
+        ++expected;
 
         obs_source_t *scene = active_scene_mask_source_for_name(*data, cfg->scene_name);
         if (!scene)
@@ -1864,9 +1927,15 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
             /* Cached main-frame publication can win the first-tick race with
              * auxiliary preparation. Recover the missing mask at its point of
              * use instead of silently omitting the configured scene. */
+            std::vector<std::string> mask_layer_ids;
+            for (const auto &mask : title.layers) {
+                if (mask && mask->use_as_scene_mask &&
+                    layer_type_can_be_scene_mask(mask->type))
+                    mask_layer_ids.push_back(mask->id);
+            }
             title_gpu_render_session_prepare_auxiliary_layers(
                 data->gpu_render_session, title, title_time,
-                data->visual_model_revision, {layer->id});
+                data->visual_model_revision, mask_layer_ids);
             mask_texture = title_gpu_render_session_render_auxiliary_layer(
                 data->gpu_render_session, layer->id, title_time);
         }
@@ -1881,44 +1950,58 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
             data, title, *layer, title_time, mask_texture,
             data->tex_w, data->tex_h);
 
-        gs_viewport_push();
-        gs_projection_push();
-        gs_blend_state_push();
-        struct vec4 clear;
-        vec4_zero(&clear);
-        if (!begin_gpu_target(data->scene_mask_scene_texrender,
-                              data->tex_w, data->tex_h, clear)) {
+        auto &scene_target = data->scene_mask_scene_texrenders[layer->id];
+        const SourceVideoFrameIdentity identity = source_video_frame_identity(data, title);
+        const auto cached_capture = data->legacy_scene_capture_identities.find(layer->id);
+        const bool reuse_capture = scene_target &&
+            cached_capture != data->legacy_scene_capture_identities.end() &&
+            cached_capture->second == identity;
+        if (!reuse_capture) {
+            if (!scene_target)
+                scene_target = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+            if (!scene_target)
+                continue;
+            gs_viewport_push();
+            gs_projection_push();
+            gs_blend_state_push();
+            struct vec4 clear;
+            vec4_zero(&clear);
+            if (!begin_gpu_target(scene_target,
+                                  data->tex_w, data->tex_h, clear)) {
+                gs_blend_state_pop();
+                gs_projection_pop();
+                gs_viewport_pop();
+                continue;
+            }
+            gs_enable_blending(true);
+            gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+
+            gs_matrix_push();
+            gs_matrix_identity();
+            if (cfg->move_with_mask) {
+                apply_scene_mask_scene_transform_gs(
+                    title, *layer, title_time, scene_layout,
+                    w, h);
+            } else {
+                gs_matrix_translate3f((float)scene_layout.x,
+                                      (float)scene_layout.y, 0.0f);
+                gs_matrix_scale3f((float)scene_layout.scale_x,
+                                  (float)scene_layout.scale_y, 1.0f);
+            }
+            auto hidden_items = hide_scene_mask_source_items(scene, data->source);
+            ++data->diagnostic_scene_capture_count;
+            obs_source_video_render(scene);
+            restore_scene_mask_source_items(hidden_items);
+            gs_matrix_pop();
+
+            gs_texrender_end(scene_target);
             gs_blend_state_pop();
             gs_projection_pop();
             gs_viewport_pop();
-            continue;
+
+            data->legacy_scene_capture_identities[layer->id] = identity;
         }
-        gs_enable_blending(true);
-        gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
-
-        gs_matrix_push();
-        gs_matrix_identity();
-        if (cfg->move_with_mask) {
-            apply_scene_mask_scene_transform_gs(
-                title, *layer, title_time, scene_layout,
-                w, h);
-        } else {
-            gs_matrix_translate3f((float)scene_layout.x,
-                                  (float)scene_layout.y, 0.0f);
-            gs_matrix_scale3f((float)scene_layout.scale_x,
-                              (float)scene_layout.scale_y, 1.0f);
-        }
-        auto hidden_items = hide_scene_mask_source_items(scene, data->source);
-        obs_source_video_render(scene);
-        restore_scene_mask_source_items(hidden_items);
-        gs_matrix_pop();
-
-        gs_texrender_end(data->scene_mask_scene_texrender);
-        gs_blend_state_pop();
-        gs_projection_pop();
-        gs_viewport_pop();
-
-        gs_texture_t *scene_texture = gs_texrender_get_texture(data->scene_mask_scene_texrender);
+        gs_texture_t *scene_texture = gs_texrender_get_texture(scene_target);
         gs_effect_t *effect = scene_mask_effect_for_data(data, data->gpu_render_session);
         if (scene_texture && effect) {
             gs_eparam_t *image = fxm_effect_param(effect, "image");
@@ -1987,6 +2070,8 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
                 gs_matrix_pop();
                 gs_blend_state_pop();
 
+                ++rendered;
+
                 /* Composite the ordinary layers between this scene mask and
                  * the next scene mask. This keeps each scene at its real stack
                  * position without drawing upper layers repeatedly. */
@@ -2000,9 +2085,10 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
                     }
                 }
                 if (layer_index + 1 < next_scene_mask) {
-                    draw_gpu_layer_range_over_current_target(
+                    if (!draw_gpu_layer_range_over_current_target(
                         data->gpu_render_session, layer_index + 1,
-                        next_scene_mask, data->tex_w, data->tex_h);
+                        next_scene_mask, data->tex_w, data->tex_h))
+                        --rendered;
                 }
             }
         }
@@ -2014,6 +2100,97 @@ static void render_scene_masks_gpu(TitleSourceData *data, const Title &title, do
             prune_gpu_effect_output_cache(data->gpu_render_session);
         }
     }
+    if (complete)
+        *complete = rendered == expected;
+}
+
+static void source_proc_render_diagnostics(void *priv, calldata_t *params)
+{
+    const auto *data = static_cast<const TitleSourceData *>(priv);
+    if (!data || !params)
+        return;
+    calldata_set_int(params, "compositions", data->diagnostic_composition_count.load());
+    calldata_set_int(params, "reused_frames", data->diagnostic_frame_reuse_count.load());
+    calldata_set_int(params, "scene_captures", data->diagnostic_scene_capture_count.load());
+    calldata_set_int(params, "matte_rasters", data->gpu_render_session
+        ? data->gpu_render_session->diagnostic_auxiliary_raster_builds.load() : 0);
+}
+
+static bool draw_source_frame_texture(gs_texture_t *texture,
+                                      uint32_t width, uint32_t height)
+{
+    gs_effect_t *effect = obs_get_base_effect(OBS_EFFECT_DEFAULT);
+    gs_eparam_t *image = fxm_effect_param(effect, "image");
+    if (!texture || !image)
+        return false;
+    gs_effect_set_texture(image, texture);
+    gs_blend_state_push();
+    gs_enable_blending(true);
+    gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+    while (gs_effect_loop(effect, "Draw"))
+        gs_draw_sprite(texture, 0, width, height);
+    gs_blend_state_pop();
+    return true;
+}
+
+/* The fixed-screen mask compositor draws several ordered ranges. Give it a
+ * transparent source-local target when it does not need the OBS backdrop, so
+ * subsequent views can present the complete result like any other graphic. */
+class ScopedSourceFrameComposition {
+public:
+    ~ScopedSourceFrameComposition() { finish(); }
+    bool begin(TitleSourceData *data, uint32_t width, uint32_t height)
+    {
+        if (!data->source_frame_texrender)
+            data->source_frame_texrender = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+        if (!data->source_frame_texrender)
+            return false;
+        state_ = std::make_unique<ScopedGpuCompositorState>();
+        struct vec4 clear;
+        vec4_zero(&clear);
+        if (!begin_gpu_target(data->source_frame_texrender, width, height, clear)) {
+            state_.reset();
+            return false;
+        }
+        target_ = data->source_frame_texrender;
+        return true;
+    }
+    gs_texture_t *finish()
+    {
+        if (!target_)
+            return nullptr;
+        gs_texrender_end(target_);
+        gs_texture_t *texture = gs_texrender_get_texture(target_);
+        target_ = nullptr;
+        state_.reset();
+        return texture;
+    }
+private:
+    gs_texrender_t *target_ = nullptr;
+    std::unique_ptr<ScopedGpuCompositorState> state_;
+};
+
+static bool reuse_source_video_frame(TitleSourceData *data, const Title &title,
+                                     uint32_t width, uint32_t height)
+{
+    if (!data->presented_frame_ready || data->dirty || data->first_frame_pending ||
+        !(data->presented_frame_identity == source_video_frame_identity(data, title)))
+        return false;
+    std::unique_lock<std::mutex> lock;
+    auto *session = data->gpu_render_session;
+    if (!lock_gpu_session_for_presentation(session, lock) ||
+        (!data->presented_frame_is_legacy && session->frame_dirty) ||
+        session->last_draw_deferred)
+        return false;
+    const bool presented = data->presented_frame_is_legacy
+        ? draw_source_frame_texture(gs_texrender_get_texture(data->source_frame_texrender),
+                                    width, height)
+        : gpu_session_final_matches_model(session) &&
+            present_gpu_session_texture_locked(session, session->final_texture,
+                                               width, height, false);
+    if (presented)
+        ++data->diagnostic_frame_reuse_count;
+    return presented;
 }
 
 static void source_video_render(void *priv, gs_effect_t * /*effect*/)
@@ -2090,6 +2267,16 @@ static void source_video_render(void *priv, gs_effect_t * /*effect*/)
     const uint32_t height = clamped_source_dimension(title->height);
     data->tex_w = width;
     data->tex_h = height;
+    if (reuse_source_video_frame(data, *title, width, height)) {
+        data->diagnostic_successful_render_serial = source_render_serial;
+        data->diagnostic_last_render_time = render_now;
+        data->diagnostic_last_render_was_skipped = false;
+        return;
+    }
+    data->presented_frame_ready = false;
+    ++data->diagnostic_composition_count;
+    const bool destination_composite =
+        source_requires_destination_compositing(*title, data->playhead);
     const bool scene_mask_cue_valid =
         title_has_valid_scene_mask_cue(data, *title);
     const bool scene_masks_in_layer_pipeline =
@@ -2105,11 +2292,15 @@ static void source_video_render(void *priv, gs_effect_t * /*effect*/)
             break;
         }
     }
+    ScopedSourceFrameComposition legacy_composition;
+    const bool legacy_isolated = !destination_composite &&
+        !scene_masks_in_layer_pipeline && first_scene_mask < title->layers.size() &&
+        legacy_composition.begin(data, width, height);
     if (scene_masks_in_layer_pipeline) {
         /* The selected OBS scenes are now ordinary transform-neutral layer
          * rasters. Render the complete stack once so camera Z, hardware depth,
          * material lighting and shadow maps all see the same surfaces. */
-        rendered = title_requires_destination_compositing(*title)
+        rendered = destination_composite
             ? title_gpu_render_session_draw_over_current_target(
                   data->gpu_render_session, width, height)
             : title_gpu_render_session_draw(data->gpu_render_session,
@@ -2121,7 +2312,7 @@ static void source_video_render(void *priv, gs_effect_t * /*effect*/)
         rendered = first_scene_mask == 0 || draw_gpu_layer_range_over_current_target(
             data->gpu_render_session, 0, first_scene_mask, width, height);
     } else {
-        rendered = title_requires_destination_compositing(*title)
+        rendered = destination_composite
             ? title_gpu_render_session_draw_over_current_target(
                   data->gpu_render_session, width, height)
             : title_gpu_render_session_draw(data->gpu_render_session,
@@ -2219,8 +2410,28 @@ static void source_video_render(void *priv, gs_effect_t * /*effect*/)
                 .arg(source_gpu_diagnostics.publish_serial));
         }
     }
+    bool masks_complete = true;
     if (!scene_masks_in_layer_pipeline)
-        render_scene_masks_gpu(data, *title, data->playhead);
+        render_scene_masks_gpu(data, *title, data->playhead, &masks_complete);
+    if (legacy_isolated) {
+        gs_texture_t *texture = legacy_composition.finish();
+        rendered = draw_source_frame_texture(texture, width, height);
+    }
+    /* Backdrop-dependent results belong to a particular OBS destination.
+     * Their scene captures are still shared, but each view must composite its
+     * own backdrop. Never memoize a deferred or incomplete publication. */
+    if (rendered && !destination_composite &&
+        (first_scene_mask == title->layers.size() || scene_masks_in_layer_pipeline ||
+         (legacy_isolated && masks_complete))) {
+        std::unique_lock<std::mutex> lock;
+        if (lock_gpu_session_for_presentation(data->gpu_render_session, lock) &&
+            (legacy_isolated || !data->gpu_render_session->frame_dirty) &&
+            !data->gpu_render_session->last_draw_deferred) {
+            data->presented_frame_identity = source_video_frame_identity(data, *title);
+            data->presented_frame_is_legacy = legacy_isolated;
+            data->presented_frame_ready = true;
+        }
+    }
 }
 
 
@@ -2415,6 +2626,19 @@ static bool source_project_property_modified(obs_properties_t *props,
 }
 
 /* ── Properties panel ─────────────────────────────────────────────── */
+static bool source_cue_button(obs_properties_t *props, obs_property_t *, void *)
+{
+    auto *data = static_cast<TitleSourceData *>(obs_properties_get_param(props));
+    if (data) title_source_cue(data->source);
+    return false;
+}
+static bool source_uncue_button(obs_properties_t *props, obs_property_t *, void *)
+{
+    auto *data = static_cast<TitleSourceData *>(obs_properties_get_param(props));
+    if (data) title_source_uncue(data->source);
+    return false;
+}
+
 static obs_properties_t *source_get_properties(void *priv)
 {
     auto *data = static_cast<TitleSourceData *>(priv);
@@ -2447,6 +2671,16 @@ static obs_properties_t *source_get_properties(void *priv)
         props, PROP_CUE_FIRST_ROW_WHEN_ACTIVE,
         fxm_tr_c("OBSTitles.CueFirstRowWhenActive"));
 
+    auto *uncue_before_transition = obs_properties_add_bool(
+        props, PROP_UNCUE_BEFORE_SCENE_TRANSITION, "Uncue before scene transition");
+    obs_property_set_long_description(uncue_before_transition,
+        "When the global Uncue before scene transition setting is enabled, "
+        "finish this source's outro before changing scenes.");
+    auto *cue = obs_properties_add_button(props, "flux_motion_cue", "Cue", source_cue_button);
+    auto *uncue = obs_properties_add_button(props, "flux_motion_uncue", "Uncue", source_uncue_button);
+    // Stable descriptions identify just these native widgets to the Qt layout adapter.
+    obs_property_set_long_description(cue, "Flux Motion: Cue this source.");
+    obs_property_set_long_description(uncue, "Flux Motion: Uncue this source.");
     add_scene_mask_properties_for_title(
         props, data ? data->title_id : std::string(),
         data ? data->project_path : std::string());
@@ -2459,6 +2693,7 @@ static void source_get_defaults(obs_data_t *settings)
     obs_data_set_default_string(settings, PROP_TITLE_ID, "");
     obs_data_set_default_string(settings, PROP_PROJECT_PATH, "");
     obs_data_set_default_bool(settings, PROP_CUE_FIRST_ROW_WHEN_ACTIVE, false);
+    obs_data_set_default_bool(settings, PROP_UNCUE_BEFORE_SCENE_TRANSITION, false);
     obs_data_set_default_bool(settings, PROP_SCENE_MASK_CLIP_TO_BOUNDS, false);
 }
 
@@ -2473,7 +2708,9 @@ static void sync_media_transport_cue_state(TitleSourceData *data, bool cue)
 
     const auto exposed = exposed_text_layers(title);
     if (cue) {
-        if (!exposed.empty()) {
+        if (exposed.empty()) {
+            title->current_cue_row = 0;
+        } else {
             fxm::live_text::normalize_live_text_rows(title, exposed);
             if (!title->live_text_rows.empty()) {
                 int row = title->current_cue_row;
@@ -2500,7 +2737,11 @@ static void sync_media_transport_cue_state(TitleSourceData *data, bool cue)
 
     ++title->cue_revision;
     TitleDataStore::instance().touch_runtime_change();
-    data->force_cue_state_sync = true;
+    data->force_cue_state_sync = cue;
+    if (!cue) {
+        data->seen_cue_revision = title->cue_revision;
+        apply_source_cue_end_state(data, source_title_snapshot(data), "media-stopped-cue-end");
+    }
     data->dirty = true;
     data->first_frame_pending = true;
 }

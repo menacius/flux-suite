@@ -575,6 +575,11 @@ ObsEditorHost::title_sources() const
     return result;
 }
 
+bool ObsEditorHost::title_has_pending_program_changes(const std::string &title_id, int row) const
+{
+    return title_source_has_pending_program_changes(title_id, row);
+}
+
 int ObsEditorHost::remove_title_sources(
     const std::vector<std::string> &title_ids)
 {
@@ -639,6 +644,15 @@ bool ObsEditorHost::open_title_in_editor(
     const std::string &title_id, std::string *error)
 {
     return launch_standalone_editor(&title_id, false, error);
+}
+
+bool ObsEditorHost::uncue_before_scene_transition() const
+{
+    return fxm::obs_plugin::uncue_before_scene_transition();
+}
+void ObsEditorHost::set_uncue_before_scene_transition(bool enabled)
+{
+    fxm::obs_plugin::set_uncue_before_scene_transition(enabled);
 }
 
 bool ObsEditorHost::open_editor_preferences(std::string *error)

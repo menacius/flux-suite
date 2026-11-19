@@ -1,4 +1,5 @@
 #include "scene-mask-dock.h"
+#include "scene-mask-panel.h"
 
 #include "title-data.h"
 #include "title-source.h"
@@ -545,6 +546,7 @@ struct SceneMaskDock::MaskEntry {
     QString title_name;
     QString layer_id;
     QString layer_name;
+    QString collapse_key;
     QString target_scene;
     double x = 0.0;
     double y = 0.0;
@@ -710,6 +712,13 @@ static std::vector<SceneMaskDock::MaskEntry> collect_mask_entries()
                 entry.layer_id = QString::fromStdString(layer->id);
                 entry.layer_name = QString::fromStdString(
                     layer->name.empty() ? layer->id : layer->name);
+                // A logical mask keeps its fold state when it moves between
+                // Preview and Monitor or the cards are rebuilt after editing.
+                const QByteArray identity = (QString::fromStdString(title->id) +
+                    QChar(0x1f) + source_name + QChar(0x1f) + entry.layer_id).toUtf8();
+                entry.collapse_key = QStringLiteral("Masks/") + QString::fromLatin1(
+                    identity.toBase64(QByteArray::Base64UrlEncoding |
+                                      QByteArray::OmitTrailingEquals));
                 const QString scene_key = scene_mask_key(layer->id, "scene");
                 const QString x_key = scene_mask_key(layer->id, "x");
                 const QString y_key = scene_mask_key(layer->id, "y");
@@ -824,18 +833,20 @@ void SceneMaskDock::rebuild_cards(const std::vector<MaskEntry> &entries)
     cards_layout_->addWidget(empty_label_);
 
     QString current_section;
+    QVBoxLayout *section_layout = nullptr;
     for (const auto &entry : entries) {
         const QString section = entry.program
             ? QStringLiteral("MONITOR") : QStringLiteral("PREVIEW");
         if (section != current_section) {
             current_section = section;
-            auto *section_header = new QLabel(section, container_);
-            QFont section_font = section_header->font();
-            section_font.setBold(true);
-            section_header->setFont(section_font);
-            section_header->setStyleSheet(QStringLiteral(
-                "padding: 4px 6px; border-bottom: 2px solid palette(highlight);"));
-            cards_layout_->addWidget(section_header);
+            auto *section_panel = new SceneMaskPanel(section,
+                entry.program ? QStringLiteral("Sections/Monitor")
+                              : QStringLiteral("Sections/Preview"), container_);
+            section_panel->setObjectName(QStringLiteral("sceneMaskSection"));
+            section_panel->setStyleSheet(QStringLiteral(
+                "QFrame#sceneMaskSection { border-top: 2px solid palette(highlight); }"));
+            cards_layout_->addWidget(section_panel);
+            section_layout = section_panel->content_layout();
         }
         auto card = std::make_unique<MaskCard>();
         card->identity = entry.identity();
@@ -845,22 +856,15 @@ void SceneMaskDock::rebuild_cards(const std::vector<MaskEntry> &entries)
         card->current_y = card->target_y = entry.y;
         card->current_zoom = card->target_zoom = entry.zoom;
         card->smoothness_amount = entry.smoothness;
-        card->root = new QFrame(container_);
+        auto *panel = new SceneMaskPanel(
+            QStringLiteral("%1 — %2").arg(entry.source_name, entry.layer_name),
+            entry.collapse_key, section_layout->parentWidget());
+        card->root = panel;
         card->root->setObjectName(QStringLiteral("sceneMaskControlCard"));
         card->root->setStyleSheet(QStringLiteral(
             "QFrame#sceneMaskControlCard { border: 1px solid palette(mid); "
             "border-radius: 6px; }"));
-        auto *outer = new QVBoxLayout(card->root);
-        outer->setContentsMargins(6, 5, 6, 6);
-        outer->setSpacing(3);
-
-        auto *heading = new QLabel(
-            QStringLiteral("%1 — %2").arg(entry.source_name, entry.layer_name),
-            card->root);
-        QFont heading_font = heading->font();
-        heading_font.setBold(true);
-        heading->setFont(heading_font);
-        outer->addWidget(heading);
+        auto *outer = panel->content_layout();
 
         card->status = new QLabel(card->root);
         card->target = new QLabel(card->root);
@@ -980,7 +984,7 @@ void SceneMaskDock::rebuild_cards(const std::vector<MaskEntry> &entries)
         connect(card->motion_timer, &QTimer::timeout, card->root,
                 [card_ptr]() { advance_card_motion(card_ptr); });
 
-        cards_layout_->addWidget(card->root);
+        section_layout->addWidget(card->root);
         cards_.push_back(std::move(card));
     }
     cards_layout_->addStretch(1);

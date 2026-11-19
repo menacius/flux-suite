@@ -185,6 +185,15 @@ TitleDock::TitleDock(QWidget *parent)
             update_playlist_countdown_label();
     });
     live_refresh_timer_->start();
+    auto *pending_changes_timer = new QTimer(this);
+    pending_changes_timer->setInterval(500); // One complete red/yellow cycle per second.
+    connect(pending_changes_timer, &QTimer::timeout, this, [this]() {
+        refresh_title_list_cue_visual_states();
+        auto title = TitleDataStore::instance().get_title(selected_id());
+        if (title && text_table_)
+            update_live_text_runtime_status(title);
+    });
+    pending_changes_timer->start();
     connect(&CacheManager::instance(), &CacheManager::liveCueStateChanged, this,
             [this](const QString &title_id, int row) {
                 if (title_id.isEmpty() && row < 0) {
@@ -517,6 +526,8 @@ void TitleDock::update_live_text_runtime_status(const std::shared_ptr<Title> &ti
             row == title->current_cue_row,
             row == title->pending_cue_row || waiting_for_prerender || preview,
             ending && !preview_on_program)));
+        if (title_has_pending_changes(title->id, row))
+            cue->setIcon(obs_icon("cue.svg", title_cue_visual_color(TitleCueVisualState::PendingChanges)));
     }
 
     schedule_title_list_cache_icon_update(title_id);
@@ -550,6 +561,10 @@ void TitleDock::refresh_title_list_cue_visual_states()
             item->setData(kTitleCueVisualStateRole, state);
             visual_state_changed = true;
         }
+        // Pending is a stable semantic state and text. Its color still needs
+        // a repaint on each blink timer even when the model role is unchanged.
+        if (state == static_cast<int>(TitleCueVisualState::PendingChanges))
+            visual_state_changed = true;
     }
 
     // Repaint once after all item roles have been updated.  This is both

@@ -1,4 +1,5 @@
 #include "obs-plugin-preferences.h"
+#include "transition-cue-gate.h"
 
 #include "cache-manager.h"
 #include "system-memory.h"
@@ -254,6 +255,20 @@ QString resolved_editor_executable()
     return {};
 }
 
+bool uncue_before_scene_transition()
+{
+    QSettings settings(QString::fromUtf8(kSettingsOrganization), QString::fromUtf8(kSettingsApplication));
+    return settings.value(QStringLiteral("ObsPluginPreferences/UncueBeforeSceneTransition"), false).toBool();
+}
+
+void set_uncue_before_scene_transition(bool enabled)
+{
+    QSettings settings(QString::fromUtf8(kSettingsOrganization), QString::fromUtf8(kSettingsApplication));
+    settings.setValue(QStringLiteral("ObsPluginPreferences/UncueBeforeSceneTransition"), enabled);
+    settings.sync();
+    transition_cue_gate_set_enabled(enabled);
+}
+
 void show_plugin_preferences(QWidget *parent)
 {
     QDialog dialog(parent);
@@ -309,6 +324,18 @@ void show_plugin_preferences(QWidget *parent)
     clearOnExit->setChecked(TitlePreferences::clear_cache_on_exit());
     cacheForm->addRow(clearOnExit);
     root->addWidget(cacheGroup);
+
+    auto *transitionGroup = new QGroupBox(QStringLiteral("Scene transitions"), &dialog);
+    auto *transitionLayout = new QVBoxLayout(transitionGroup);
+    auto *uncueBeforeTransition = new QCheckBox(
+        QStringLiteral("Enable per-source uncue before scene transitions"), transitionGroup);
+    uncueBeforeTransition->setChecked(uncue_before_scene_transition());
+    uncueBeforeTransition->setToolTip(QStringLiteral(
+        "Only sources with Uncue before scene transition enabled in their Properties take part. "
+        "Finish their outros, then run the selected transition. Includes shared nested titles. "
+        "Manual T-bar transitions remain manual."));
+    transitionLayout->addWidget(uncueBeforeTransition);
+    root->addWidget(transitionGroup);
 
     auto *editorGroup=new QGroupBox(QStringLiteral("Flux Motion"),&dialog);
     auto *editorForm=new QFormLayout(editorGroup);
@@ -368,6 +395,7 @@ void show_plugin_preferences(QWidget *parent)
     sharedSettings.setValue(QString::fromUtf8(kPrerenderPlaybackModeKey),playbackMode->currentIndex());
     sharedSettings.setValue(QString::fromUtf8(kPrerenderCadenceModeKey),cadenceMode->currentIndex());
     sharedSettings.setValue(QString::fromUtf8(kPrerenderPlayAfterRenderingKey),cachedOnly->isChecked());
+    set_uncue_before_scene_transition(uncueBeforeTransition->isChecked());
     sharedSettings.sync();
     set_configured_editor_executable(editorPath->text());
 }

@@ -27,7 +27,8 @@ assert '"deferred-source-cue-end-state"' in tick
 
 # Activation is retried after the collection store appears.
 assert "bool        activation_cue_pending = false;" in runtime
-assert "data->cue_first_row_when_active && !title" in resources
+assert "data->activation_cue_pending = !title;" in resources
+assert "!data->cue_first_row_when_active && scene_mask_layers(title).empty()" in resources
 assert "if (data->activation_cue_pending)" in tick
 assert "data->scene_mask_foreground_active" in tick[tick.index("if (data->activation_cue_pending)") :]
 

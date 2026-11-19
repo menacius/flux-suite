@@ -281,7 +281,6 @@ static void clear_extension_image_textures();
 static std::atomic<uint64_t> g_source_frontend_presentation_generation {1};
 static std::atomic<bool> g_source_scene_collection_transition {false};
 static std::atomic<bool> g_source_frontend_shutting_down {false};
-
 void title_source_invalidate_all_presentations()
 {
     g_source_frontend_presentation_generation.fetch_add(
@@ -345,6 +344,24 @@ static bool take_source_cache_wake_frame(
     return true;
 }
 
+struct SourceVideoFrameIdentity {
+    uint64_t frame_time = 0;
+    uint64_t tick = 0;
+    uint64_t model = 0;
+    uint64_t inputs = 0;
+    uint64_t presentation = 0;
+    double playhead = 0.0;
+    bool mask_cue_valid = false;
+
+    bool operator==(const SourceVideoFrameIdentity &other) const
+    {
+        return frame_time != 0 && frame_time == other.frame_time &&
+            tick == other.tick && model == other.model &&
+            inputs == other.inputs && presentation == other.presentation &&
+            playhead == other.playhead && mask_cue_valid == other.mask_cue_valid;
+    }
+};
+
 struct TitleSourceData {
     obs_source_t *source  = nullptr;
     std::unique_ptr<fxm::audio::SourceAudioRuntime> audio_runtime;
@@ -358,7 +375,15 @@ struct TitleSourceData {
     std::chrono::steady_clock::time_point last_project_reload_check;
     uint64_t project_revision = 0;
     std::atomic<bool> output_visible {true};
-    std::atomic<bool> shown_on_display {true};
+    std::atomic<bool> shown_on_display {false};
+    std::atomic<int> external_cue_command {0}; // -1 uncue, -2 cue last, row+1 cue row
+    std::atomic<bool> external_command_in_flight {false};
+    std::atomic<bool> external_cue_active {false};
+    std::atomic<bool> external_cue_ending {false};
+    std::atomic<double> external_cue_remaining {0.0};
+    std::shared_ptr<Title> local_cue_control;
+    uint64_t local_cue_authored_revision = 0;
+    uint64_t local_cue_model_revision = 0;
     bool        manual_uncue = false;
     double      manual_uncue_floor = -1.0; /* Terminal uncue may never rewind below its starting playhead. */
     bool        auto_advance = false;  /* future: playlist mode */
@@ -373,6 +398,7 @@ struct TitleSourceData {
     std::shared_ptr<Title> editor_title_snapshot;
     bool        source_audio_active_known = false;
     bool        source_audio_active = false;
+    bool        audio_transport_running = false;
     uint64_t    seen_audio_membership_revision =
         std::numeric_limits<uint64_t>::max();
 
@@ -421,9 +447,24 @@ struct TitleSourceData {
     /* Unified GPU-only render graph shared by live/editor/cache. */
     TitleGpuRenderSession *gpu_render_session = nullptr;
 
+    /* Shared by every view of this source, never by title ID: duplicates can
+     * have independent cues and mask bindings. Graphics-thread-owned stamps
+     * expire on the next OBS video tick even when the title is held. */
+    std::atomic<uint64_t> render_input_revision {1};
+    SourceVideoFrameIdentity presented_frame_identity;
+    SourceVideoFrameIdentity scene_mask_capture_identity;
+    std::unordered_map<std::string, SourceVideoFrameIdentity>
+        legacy_scene_capture_identities;
+    bool presented_frame_ready = false;
+    bool presented_frame_is_legacy = false;
+    bool scene_mask_capture_ready = false;
+    gs_texrender_t *source_frame_texrender = nullptr;
+    std::atomic<uint64_t> diagnostic_composition_count {0};
+    std::atomic<uint64_t> diagnostic_frame_reuse_count {0};
+    std::atomic<uint64_t> diagnostic_scene_capture_count {0};
+
     /* Scene-mask GPU resources. */
     std::mutex    texture_mutex;
-    gs_texrender_t *scene_mask_scene_texrender = nullptr;
     std::unordered_map<std::string, gs_texrender_t *>
         scene_mask_scene_texrenders;
     gs_texrender_t *scene_mask_matted_texrender = nullptr;
@@ -477,6 +518,24 @@ struct TitleSourceData {
     };
     bool scene_mask_foreground_active = false;
     std::vector<ActiveSceneMaskScene> active_scene_mask_scenes;
+    bool scene_mask_poster = false;
+    std::shared_ptr<Title> retained_cued_title;
+    uint64_t retained_cued_title_generation = 0;
+    TitleProgramSnapshot program_state;
+    std::shared_ptr<Title> program_render_title;
+    std::atomic<bool> pending_program_changes {false};
+    uint64_t program_title_generation = 0;
+    uint64_t program_identity_cue_revision = std::numeric_limits<uint64_t>::max();
+    int program_identity_cue_row = -2;
+    uint64_t program_identity_revision = std::numeric_limits<uint64_t>::max();
+    std::string program_authored_identity;
+    const Title *program_authored_instance = nullptr;
+    bool program_render_dirty = false;
+    uint64_t analyzed_visual_revision = 0;
+    bool has_clock_layer = false;
+    bool has_ticker_layer = false;
+    bool has_independent_asset_layer = false;
+    bool has_timeline_animation = false;
 };
 
 static std::shared_ptr<Title> editor_title_snapshot_for_source(
@@ -508,6 +567,31 @@ static bool reload_source_project(TitleSourceData *data, bool force,
     }
     {
         std::lock_guard<std::mutex> lock(data->project_mutex);
+        if (!force) {
+            for (auto &incoming : project.titles) {
+                const auto existing = std::find_if(
+                    data->project_titles.begin(), data->project_titles.end(),
+                    [&](const auto &title) {
+                        return title && incoming && title->id == incoming->id;
+                    });
+                if (existing != data->project_titles.end())
+                    copy_title_cue_runtime_state(*incoming, **existing);
+            }
+            if (!data->waiting_for_cue) {
+                const auto selected = std::find_if(
+                    data->project_titles.begin(), data->project_titles.end(),
+                    [&](const auto &title) {
+                        return title && title->id == data->title_id;
+                    });
+                const bool still_authored = std::any_of(
+                    project.titles.begin(), project.titles.end(),
+                    [&](const auto &title) {
+                        return title && title->id == data->title_id;
+                    });
+                if (!still_authored && selected != data->project_titles.end())
+                    project.titles.push_back(*selected);
+            }
+        }
         data->project_titles = std::move(project.titles);
         data->project_modified_msecs = modified;
         ++data->project_revision;
@@ -553,11 +637,24 @@ static std::shared_ptr<Title> source_project_title(
 static std::shared_ptr<Title> source_title_snapshot(TitleSourceData *data)
 {
     if (!data) return nullptr;
+    if (data->scene_mask_foreground_active &&
+        data->program_title_generation ==
+            g_source_frontend_presentation_generation.load(std::memory_order_acquire)) {
+        auto program = std::atomic_load(&data->program_render_title);
+        if (program && program->id == data->title_id)
+            return program;
+    }
     if (data->editor_transport_controlled)
         return editor_title_snapshot_for_source(data);
     if (!data->project_path.empty())
         return source_project_title(data, false);
-    return TitleDataStore::instance().get_title_snapshot(data->title_id);
+    auto title = TitleDataStore::instance().get_title_snapshot(data->title_id);
+    if (!title && !data->waiting_for_cue && data->retained_cued_title &&
+        data->retained_cued_title->id == data->title_id &&
+        data->retained_cued_title_generation ==
+            g_source_frontend_presentation_generation.load(std::memory_order_acquire))
+        return clone_title_snapshot(data->retained_cued_title);
+    return title;
 }
 
 static std::shared_ptr<Title> source_title_mutable(TitleSourceData *data)
@@ -567,7 +664,19 @@ static std::shared_ptr<Title> source_title_mutable(TitleSourceData *data)
         return clone_title_snapshot(editor_title_snapshot_for_source(data));
     if (!data->project_path.empty())
         return source_project_title(data, true);
-    return TitleDataStore::instance().get_title(data->title_id);
+    auto title = TitleDataStore::instance().get_title(data->title_id);
+    const uint64_t generation =
+        g_source_frontend_presentation_generation.load(std::memory_order_acquire);
+    if (title) {
+        data->retained_cued_title = title;
+        data->retained_cued_title_generation = generation;
+    } else if (!data->waiting_for_cue && data->retained_cued_title &&
+               data->retained_cued_title->id == data->title_id &&
+               data->retained_cued_title_generation == generation) {
+        // Removing a library entry must not cut a title already on air.
+        title = data->retained_cued_title;
+    }
+    return title;
 }
 
 static uint64_t source_model_revision(const TitleSourceData *data)
@@ -577,6 +686,105 @@ static uint64_t source_model_revision(const TitleSourceData *data)
         ? store ^ (data->project_revision * 0x9E3779B185EBCA87ULL)
         : store;
 }
+
+static void apply_live_text_row(const std::shared_ptr<Title> &title, int row);
+
+static std::string program_cue_identity(const std::shared_ptr<Title> &title,
+                                        int row, const std::string &row_id)
+{
+    if (!title) return {};
+    if (!row_id.empty()) {
+        const auto it = std::find(title->live_text_row_ids.begin(), title->live_text_row_ids.end(), row_id);
+        if (it == title->live_text_row_ids.end()) return "missing-cue-row:" + row_id;
+        row = static_cast<int>(it - title->live_text_row_ids.begin());
+    }
+    auto cue = clone_title_snapshot(title);
+    if (row >= 0 && row < static_cast<int>(cue->live_text_rows.size()))
+        apply_live_text_row(cue, row);
+    // Transport/persistence phases are not authored cue edits.
+    cue->current_cue_row = 0;
+    cue->cue_background_persistence = false;
+    cue->cue_text_persistence = false;
+    cue->cue_persistence_transition = false;
+    cue->cue_persistent_text_columns.clear();
+    return CacheManager::instance().contentHashForTitle(*cue).toStdString();
+}
+
+static std::shared_ptr<Title> source_program_playback_title(
+    TitleSourceData *data, const std::shared_ptr<Title> &authored)
+{
+    if (!authored || data->editor_transport_controlled ||
+        !data->scene_mask_foreground_active)
+        return authored;
+    const uint64_t generation =
+        g_source_frontend_presentation_generation.load(std::memory_order_acquire);
+    if (generation != data->program_title_generation) {
+        data->program_state = {};
+        data->program_title_generation = generation;
+        data->program_identity_revision = std::numeric_limits<uint64_t>::max();
+    }
+    const uint64_t revision = source_model_revision(data);
+    const int cue_row = authored->current_cue_row;
+    std::string cue_id;
+    if (cue_row >= 0 && cue_row < static_cast<int>(authored->live_text_row_ids.size()))
+        cue_id = authored->live_text_row_ids[cue_row];
+    const bool runtime_changed = data->program_state.title &&
+        !title_cue_runtime_equal(*data->program_state.title, *authored);
+    const bool identity_changed = runtime_changed || !data->program_state.title ||
+        revision != data->program_identity_revision ||
+        authored->cue_revision != data->program_identity_cue_revision ||
+        cue_row != data->program_identity_cue_row;
+    if (identity_changed) {
+        data->program_authored_identity = program_cue_identity(authored, cue_row, cue_id);
+        data->program_identity_revision = revision;
+        data->program_identity_cue_revision = authored->cue_revision;
+        data->program_identity_cue_row = cue_row;
+    }
+    // Provider refreshes change applied text on the same authoring instance;
+    // an editor save publishes a new instance. Keep external data live without
+    // treating its changing values as a new authored document.
+    if (data->program_authored_instance == authored.get() && authored->external_data_enabled &&
+        data->program_state.title && !data->program_state.pending_changes &&
+        data->program_state.command_revision == authored->cue_revision)
+        data->program_state.authored_identity = data->program_authored_identity;
+    data->program_authored_instance = authored.get();
+    const bool captured = data->program_state.update(
+        authored, data->program_authored_identity, !data->waiting_for_cue);
+    if (identity_changed || captured || runtime_changed) {
+        data->program_state.authored_identity =
+            program_cue_identity(data->program_state.title, cue_row, cue_id);
+        data->program_state.pending_changes = data->program_authored_identity !=
+            data->program_state.authored_identity;
+    }
+    data->program_render_dirty |= captured || runtime_changed;
+    data->pending_program_changes.store(data->program_state.pending_changes,
+                                        std::memory_order_release);
+    return data->program_state.title;
+}
+
+struct SourceProgramRuntimeCommit {
+    TitleSourceData *data;
+    std::shared_ptr<Title> authored;
+    std::shared_ptr<Title> playback;
+    uint64_t command_revision;
+
+    ~SourceProgramRuntimeCommit()
+    {
+        if (!authored || !playback || authored == playback)
+            return;
+        // A command arriving during this tick belongs to the next tick.
+        const bool runtime_changed = authored->cue_revision == command_revision &&
+            !title_cue_runtime_equal(*authored, *playback);
+        if (runtime_changed) {
+            copy_title_cue_runtime_state(*authored, *playback);
+            TitleDataStore::instance().touch_runtime_change();
+        }
+        if (runtime_changed || data->program_render_dirty) {
+            std::atomic_store(&data->program_render_title, clone_title_snapshot(playback));
+            data->program_render_dirty = false;
+        }
+    }
+};
 
 static std::mutex g_title_source_instances_mutex;
 static std::unordered_map<obs_source_t *, TitleSourceData *>
@@ -588,6 +796,22 @@ static void register_title_source_instance(TitleSourceData *data)
         return;
     std::lock_guard<std::mutex> lock(g_title_source_instances_mutex);
     g_title_source_instances[data->source] = data;
+}
+
+bool title_source_has_pending_program_changes(const std::string &title_id, int row)
+{
+    std::lock_guard<std::mutex> lock(g_title_source_instances_mutex);
+    for (const auto &[source, data] : g_title_source_instances) {
+        const auto program = data ? std::atomic_load(&data->program_render_title) : nullptr;
+        if (program && program->id == title_id &&
+            (row < 0 || program->current_cue_row == row) &&
+            obs_source_active(source) &&
+            data->external_cue_active.load(std::memory_order_acquire) &&
+            data->output_visible.load(std::memory_order_acquire) &&
+            data->pending_program_changes.load(std::memory_order_acquire))
+            return true;
+    }
+    return false;
 }
 
 static void unregister_title_source_instance(TitleSourceData *data)
@@ -902,7 +1126,9 @@ static void apply_source_presentation_reset(TitleSourceData *data,
      * identical. Release them at the same generation boundary; otherwise the
      * name-only configuration comparison can retain and render an outgoing
      * collection's scene through a mask after the switch. */
-    release_active_scene_mask_scenes(data);
+    if (data->applied_frontend_presentation_generation.load(
+            std::memory_order_acquire) != frontend_generation)
+        release_active_scene_mask_scenes(data);
     data->applied_presentation_generation.store(
         requested_generation, std::memory_order_release);
     data->applied_frontend_presentation_generation.store(
@@ -1456,13 +1682,15 @@ static void set_scene_mask_property_defaults(
     }
 }
 
-static void refresh_scene_mask_configs(TitleSourceData *data, obs_data_t *settings)
+static void refresh_scene_mask_configs(TitleSourceData *data, obs_data_t *settings,
+                                      const std::shared_ptr<Title> &resolved_title = nullptr)
 {
     if (!data || !settings)
         return;
 
     data->scene_masks.clear();
-    auto title = source_title_snapshot(data);
+    data->render_input_revision.fetch_add(1, std::memory_order_relaxed);
+    auto title = resolved_title ? resolved_title : source_title_snapshot(data);
     set_scene_mask_property_defaults(settings, data->title_id, title);
     const bool clip_all_masks =
         obs_data_get_bool(settings, PROP_SCENE_MASK_CLIP_TO_BOUNDS);
@@ -1539,6 +1767,8 @@ static void release_active_scene_mask_scenes(TitleSourceData *data)
     if (!data)
         return;
 
+    data->render_input_revision.fetch_add(1, std::memory_order_relaxed);
+
     for (auto &active : data->active_scene_mask_scenes) {
         if (active.source) {
             /* Manual scene rendering must mirror OBS scene-item lifecycle.
@@ -1563,6 +1793,8 @@ static void release_active_scene_mask_scenes(TitleSourceData *data)
 
 static bool title_has_valid_scene_mask_cue(const TitleSourceData *data, const Title &title)
 {
+    if (data && data->scene_mask_poster)
+        return true;
     if (!data || data->waiting_for_cue)
         return false;
 

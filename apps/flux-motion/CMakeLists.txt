@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(flux-motion VERSION 0.8.20)
+project(flux-motion VERSION 0.8.21)
 
 # Resolve shared packages and host adapters from the monorepo. Cache entries
 # keep embedded/non-standard checkouts possible.
@@ -39,7 +39,7 @@ flux_extract_semver("${FLUX_MOTION_OBS_VERSION_LABEL}"
 # Manually assigned development delivery identifier. Update this once for each
 # package handed to the user. It is intentionally source-controlled and does
 # not change when the same checkout is rebuilt.
-set(OBS_FXM_DEVELOPMENT_VERSION "422")
+set(OBS_FXM_DEVELOPMENT_VERSION "430")
 
 # ── C++ standard ────────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 17)
@@ -49,8 +49,8 @@ if(MSVC)
 endif()
 
 # ── OBS plugin packaging layout ─────────────────────────────────────
-# OBS' modern manual-install layout is:
-#   <plugins-root>/<plugin-name>/bin/<arch>/<plugin binary>
+# OBS 33's Windows manual-install layout is:
+#   <plugins-root>/<plugin-name>/<plugin binary>
 #   <plugins-root>/<plugin-name>/data/locale/*.ini
 # Keeping build artifacts in this shape makes the build tree directly copyable
 # into the OBS plugins directory and matches the Windows ProgramData layout.
@@ -65,8 +65,15 @@ endif()
 set(OBS_TITLES_PACKAGE_DIR
     "${CMAKE_BINARY_DIR}/${OBS_TITLES_PLUGIN_NAME}"
     CACHE PATH "Staging directory for the OBS user-plugin folder layout")
-set(OBS_TITLES_PACKAGE_BIN_DIR
-    "${OBS_TITLES_PACKAGE_DIR}/bin/${OBS_TITLES_ARCH_DIR}")
+set(OBS_TITLES_PLUGIN_BINARY_DESTINATION
+    "${OBS_TITLES_PLUGIN_NAME}/bin/${OBS_TITLES_ARCH_DIR}")
+if(WIN32)
+  set(OBS_TITLES_PLUGIN_BINARY_DESTINATION "${OBS_TITLES_PLUGIN_NAME}")
+  set(OBS_TITLES_PACKAGE_BIN_DIR "${OBS_TITLES_PACKAGE_DIR}")
+else()
+  set(OBS_TITLES_PACKAGE_BIN_DIR
+      "${OBS_TITLES_PACKAGE_DIR}/bin/${OBS_TITLES_ARCH_DIR}")
+endif()
 
 # ── Qt auto-tools ───────────────────────────────────────────────────
 set(CMAKE_AUTOMOC ON)
@@ -1399,7 +1406,7 @@ if(WIN32)
         COMMAND_EXPAND_LISTS
         COMMENT "Copying lightweight OBS plugin runtime DLL dependencies")
     install(FILES ${OBS_TITLES_RUNTIME_DLLS}
-            DESTINATION ${OBS_TITLES_PLUGIN_NAME}/bin/${OBS_TITLES_ARCH_DIR})
+            DESTINATION ${OBS_TITLES_PLUGIN_BINARY_DESTINATION})
   else()
     message(WARNING
       "No vcpkg runtime DLLs were found to bundle with flux-motion. "
@@ -1413,8 +1420,8 @@ endif()
 # Example Windows prefix: C:/ProgramData/obs-studio/plugins
 # Example Linux prefix:   ~/.config/obs-studio/plugins
 install(TARGETS flux-motion-obs-plugin
-        RUNTIME DESTINATION ${OBS_TITLES_PLUGIN_NAME}/bin/${OBS_TITLES_ARCH_DIR}
-        LIBRARY DESTINATION ${OBS_TITLES_PLUGIN_NAME}/bin/${OBS_TITLES_ARCH_DIR})
+        RUNTIME DESTINATION ${OBS_TITLES_PLUGIN_BINARY_DESTINATION}
+        LIBRARY DESTINATION ${OBS_TITLES_PLUGIN_BINARY_DESTINATION})
 install(TARGETS flux-motion-editor flux-motion-renderer
         RUNTIME DESTINATION flux-motion-editor/bin)
 install(DIRECTORY data/locale data/icons data/canned-templates
@@ -2297,6 +2304,67 @@ if(OBS_FXM_BUILD_TESTS)
       Core src/core src/layers src/effects src/timeline src/text src/transitions)
   add_test(NAME title_snapshot_test COMMAND title_snapshot_test)
 
+  add_executable(source_settings_buttons_ui_test tests/source_settings_buttons_ui_test.cpp)
+  target_include_directories(source_settings_buttons_ui_test PRIVATE ${OBS_FXM_OBS_PLUGIN_DIR})
+  target_link_libraries(source_settings_buttons_ui_test PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+  add_test(NAME source_settings_buttons_ui_test COMMAND source_settings_buttons_ui_test)
+  set_tests_properties(source_settings_buttons_ui_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=minimal")
+  if(WIN32)
+    get_filename_component(fxm_buttons_test_qt_plugins "${Qt6_DIR}/../../../plugins" ABSOLUTE)
+    set_property(TEST source_settings_buttons_ui_test APPEND PROPERTY ENVIRONMENT "QT_PLUGIN_PATH=${fxm_buttons_test_qt_plugins}")
+    set_tests_properties(source_settings_buttons_ui_test PROPERTIES ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt${QT_VERSION_MAJOR}::Core>")
+  endif()
+  add_executable(live_text_cue_field_ui_test tests/live_text_cue_field_ui_test.cpp)
+  target_include_directories(live_text_cue_field_ui_test PRIVATE Editor)
+  target_link_libraries(live_text_cue_field_ui_test PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+  add_test(NAME live_text_cue_field_ui_test COMMAND live_text_cue_field_ui_test)
+  set_tests_properties(live_text_cue_field_ui_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=minimal")
+  if(WIN32)
+    get_filename_component(fxm_cue_test_qt_plugins "${Qt6_DIR}/../../../plugins" ABSOLUTE)
+    set_property(TEST live_text_cue_field_ui_test APPEND PROPERTY ENVIRONMENT "QT_PLUGIN_PATH=${fxm_cue_test_qt_plugins}")
+    set_tests_properties(live_text_cue_field_ui_test PROPERTIES ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt${QT_VERSION_MAJOR}::Core>")
+  endif()
+  add_executable(scene_mask_dock_ui_test tests/scene_mask_dock_ui_test.cpp)
+  target_include_directories(scene_mask_dock_ui_test PRIVATE ${OBS_FXM_OBS_PLUGIN_DIR} Editor)
+  target_link_libraries(scene_mask_dock_ui_test PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+  add_test(NAME scene_mask_dock_ui_test COMMAND scene_mask_dock_ui_test)
+  set_tests_properties(scene_mask_dock_ui_test PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=minimal")
+  if(WIN32)
+    get_filename_component(fxm_test_qt_plugins "${Qt6_DIR}/../../../plugins" ABSOLUTE)
+    set_property(TEST scene_mask_dock_ui_test APPEND PROPERTY ENVIRONMENT
+        "QT_PLUGIN_PATH=${fxm_test_qt_plugins}")
+    set_tests_properties(scene_mask_dock_ui_test PROPERTIES ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt${QT_VERSION_MAJOR}::Core>")
+  endif()
+  add_executable(transition_cue_gate_integration_test
+      tests/transition_cue_gate_integration_test.cpp
+      ${OBS_FXM_OBS_PLUGIN_DIR}/transition-cue-gate.cpp)
+  target_include_directories(transition_cue_gate_integration_test PRIVATE ${OBS_FXM_OBS_PLUGIN_DIR})
+  target_link_libraries(transition_cue_gate_integration_test PRIVATE Qt${QT_VERSION_MAJOR}::Core OBS::libobs)
+  add_test(NAME transition_cue_gate_integration_test COMMAND transition_cue_gate_integration_test)
+  set_tests_properties(transition_cue_gate_integration_test PROPERTIES SKIP_RETURN_CODE 77)
+  if(WIN32)
+    set_tests_properties(transition_cue_gate_integration_test PROPERTIES ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt${QT_VERSION_MAJOR}::Core>;PATH=path_list_prepend:$<TARGET_FILE_DIR:OBS::libobs>;PATH=path_list_prepend:$ENV{ProgramFiles}/obs-studio/bin/64bit")
+  endif()
+  if(WIN32)
+    add_executable(source_frame_reuse_integration_test tests/source_frame_reuse_integration_test.cpp)
+    target_link_libraries(source_frame_reuse_integration_test PRIVATE Qt${QT_VERSION_MAJOR}::Widgets OBS::libobs)
+    add_dependencies(source_frame_reuse_integration_test flux-motion-obs-plugin)
+    add_test(NAME source_frame_reuse_integration_test
+        COMMAND source_frame_reuse_integration_test $<TARGET_FILE:flux-motion-obs-plugin>
+            "${CMAKE_CURRENT_SOURCE_DIR}/data" "$ENV{ProgramFiles}/obs-studio")
+    set_tests_properties(source_frame_reuse_integration_test PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 90
+        ENVIRONMENT "QT_QPA_PLATFORM=minimal;QT_PLUGIN_PATH=${fxm_test_qt_plugins}"
+        ENVIRONMENT_MODIFICATION
+            "PATH=path_list_prepend:$<TARGET_FILE_DIR:flux-motion-obs-plugin>;PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt${QT_VERSION_MAJOR}::Core>;PATH=path_list_prepend:$ENV{ProgramFiles}/obs-studio/bin/64bit")
+  endif()
+  add_test(NAME version_label_parser_test
+      COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/version_label_parser_test.cmake)
+
   add_executable(gpu_rounded_image_clip_test
       tests/gpu_rounded_image_clip_test.cpp)
   add_test(NAME gpu_rounded_image_clip_test COMMAND gpu_rounded_image_clip_test
@@ -2462,6 +2530,15 @@ if(OBS_FXM_BUILD_TESTS)
 
   find_package(Python3 COMPONENTS Interpreter QUIET)
   if(Python3_Interpreter_FOUND)
+    if(WIN32)
+      add_test(NAME obs_plugin_load_smoke_test
+          COMMAND ${Python3_EXECUTABLE}
+              ${CMAKE_CURRENT_SOURCE_DIR}/tools/obs_plugin_load_smoke_test.py
+              $<TARGET_FILE:flux-motion-obs-plugin>
+              "$ENV{ProgramFiles}/obs-studio/bin/64bit")
+      set_tests_properties(obs_plugin_load_smoke_test PROPERTIES
+          SKIP_RETURN_CODE 77 LABELS "integration;obs;compatibility")
+    endif()
     add_test(NAME python_contract_regression_suite
         COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/run_python_contract_tests.py)

@@ -1,4 +1,5 @@
 #include "fxm-modern-controls.h"
+#include "fxm-caret-paint.h"
 #include "title-assets.h"
 #include "title-localization.h"
 
@@ -270,29 +271,7 @@ QString inferred_panel_title(QWidget *section, const QString &requested)
 
 void draw_caret(QPainter &painter, const QRectF &rect, int state, const QColor &color)
 {
-    painter.save();
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(color);
-    const QPointF center = rect.center();
-    QPolygonF triangle;
-    if (state > 0) {
-        triangle << QPointF(center.x() - 4.0, center.y() - 2.0)
-                 << QPointF(center.x() + 4.0, center.y() - 2.0)
-                 << QPointF(center.x(), center.y() + 3.0);
-    } else {
-        triangle << QPointF(center.x() - 2.0, center.y() - 4.0)
-                 << QPointF(center.x() - 2.0, center.y() + 4.0)
-                 << QPointF(center.x() + 3.0, center.y());
-    }
-    painter.drawPolygon(triangle);
-    if (state == 1) {
-        QColor marker = color;
-        marker.setAlpha(std::min(255, color.alpha() + 35));
-        painter.setBrush(marker);
-        painter.drawEllipse(QPointF(center.x() + 6.0, center.y() + 5.0), 1.45, 1.45);
-    }
-    painter.restore();
+    fxm::ui::draw_caret(painter, rect, state, color);
 }
 
 /* Qt styles do not consistently preserve the native combo arrow once the
@@ -795,11 +774,7 @@ void FxmSwitch::paintEvent(QPaintEvent *event)
 FxmCaretButton::FxmCaretButton(QWidget *parent)
     : QToolButton(parent)
 {
-    setAutoRaise(true);
-    setCursor(Qt::PointingHandCursor);
-    setFocusPolicy(Qt::NoFocus);
-    setFixedSize(18, 20);
-    setToolButtonStyle(Qt::ToolButtonIconOnly);
+    fxm::ui::initialize_caret_button(*this);
 }
 
 QSize FxmCaretButton::sizeHint() const
@@ -820,16 +795,7 @@ void FxmCaretButton::setCaretState(int state)
 void FxmCaretButton::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
-    QPainter painter(this);
-    if (underMouse() && isEnabled()) {
-        QColor hover = palette().color(QPalette::Button);
-        hover.setAlpha(90);
-        painter.fillRect(rect().adjusted(1, 1, -1, -1), hover);
-    }
-    QColor caret = palette().color(isEnabled() ? QPalette::Active : QPalette::Disabled,
-                                   QPalette::WindowText);
-    caret.setAlpha(isEnabled() ? 175 : 85);
-    draw_caret(painter, rect(), state_, caret);
+    fxm::ui::paint_caret_button(*this, state_);
 }
 
 FxmAngleControl::FxmAngleControl(QWidget *parent)

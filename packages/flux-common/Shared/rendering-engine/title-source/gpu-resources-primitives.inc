@@ -1244,6 +1244,7 @@ static gs_texture_t *title_gpu_render_session_render_auxiliary_layer(
     double title_time);
 static void clear_runtime_scene_mask_rasters_locked(
     TitleGpuRenderSession *session);
+static void source_proc_render_diagnostics(void *priv, calldata_t *params);
 
 /* ══════════════════════════════════════════════════════════════════
  *  OBS source callbacks
@@ -1361,6 +1362,11 @@ static void *source_create(obs_data_t *settings, obs_source_t *source)
         .arg(QString::fromStdString(data->title_id))
         .arg(reinterpret_cast<quintptr>(data->gpu_render_session), 0, 16));
     register_title_source_instance(data);
+    auto *procs = obs_source_get_proc_handler(source);
+    proc_handler_add(procs, "void flux_motion_cue(in int cue_row, out bool accepted)", source_proc_cue, data);
+    proc_handler_add(procs, "void flux_motion_uncue(out bool accepted)", source_proc_uncue, data);
+    proc_handler_add(procs, "void flux_motion_get_cue_state(out bool active, out bool ending, out bool pending, out float remaining_seconds, out int cue_row, out bool pending_changes)", source_proc_cue_state, data);
+    proc_handler_add(procs, "void flux_motion_get_render_diagnostics(out int compositions, out int reused_frames, out int scene_captures, out int matte_rasters)", source_proc_render_diagnostics, data);
     return data;
 }
 
@@ -1384,7 +1390,8 @@ static void source_destroy(void *priv)
     {
         std::lock_guard<std::mutex> lock(data->texture_mutex);
         obs_enter_graphics();
-        if (data->scene_mask_scene_texrender) gs_texrender_destroy(data->scene_mask_scene_texrender);
+        if (data->source_frame_texrender)
+            gs_texrender_destroy(data->source_frame_texrender);
         for (auto &pair : data->scene_mask_scene_texrenders) {
             if (pair.second)
                 gs_texrender_destroy(pair.second);
@@ -1393,7 +1400,6 @@ static void source_destroy(void *priv)
         if (data->scene_mask_matted_texrender) gs_texrender_destroy(data->scene_mask_matted_texrender);
         if (data->scene_mask_effect) gs_effect_destroy(data->scene_mask_effect);
         obs_leave_graphics();
-        data->scene_mask_scene_texrender = nullptr;
         data->scene_mask_matted_texrender = nullptr;
         data->scene_mask_effect = nullptr;
         data->tex_w = 0;
@@ -1414,17 +1420,36 @@ static void source_update(void *priv, obs_data_t *settings)
         obs_data_get_string(settings, PROP_TITLE_ID);
     const bool title_changed = next_title_id != previous_title_id ||
         next_project_path != previous_project_path;
+    // Mask transforms change the live scene capture, not the title artwork.
+    // OBS coalesces source updates onto the video thread. Keep the prepared
+    // graph, cache identity, audio membership and presentation generation.
+    const bool transport_changed = data->editor_audio_preview !=
+        obs_data_get_bool(settings, "editor_audio_preview") ||
+        data->editor_transport_controlled != obs_data_get_bool(settings, "editor_transport_controlled");
+    if (!title_changed && !transport_changed) {
+        data->cue_first_row_when_active = obs_data_get_bool(settings, PROP_CUE_FIRST_ROW_WHEN_ACTIVE);
+        refresh_scene_mask_configs(data, settings);
+        if (data->shown_on_display.load(std::memory_order_acquire))
+            sync_scene_mask_scenes_for_cue(data, source_title_snapshot(data));
+        return;
+    }
     /* Scene-mask properties share OBS's source_update callback with the title
      * binding.  Updating a scene, fit, position or zoom is a visual refresh,
      * not a transport operation: keep the current cue and its runtime timer. */
     if (title_changed) {
+        data->local_cue_control.reset();
+        data->external_cue_command.store(0);
+        data->program_state = {};
+        data->program_identity_revision = std::numeric_limits<uint64_t>::max();
+        std::atomic_store(&data->program_render_title, std::shared_ptr<Title>{});
+        data->pending_program_changes.store(false, std::memory_order_release);
         clear_live_cue_runtime_for_source(data, previous_title_id);
         data->cue_timer_row = -1;
         data->cue_timer_elapsed_seconds = 0.0;
     }
     const bool keep_scene_masks_visible =
         data->shown_on_display.load(std::memory_order_acquire);
-    if (keep_scene_masks_visible)
+    if (keep_scene_masks_visible && title_changed)
         release_active_scene_mask_scenes(data);
 
     data->project_path = next_project_path;
@@ -1511,8 +1536,24 @@ static void source_update(void *priv, obs_data_t *settings)
 static bool cue_first_live_text_row_on_activation(
     TitleSourceData *data, const std::shared_ptr<Title> &title)
 {
-    if (!data || !data->cue_first_row_when_active || !title)
+    if (!data || !title ||
+        (!data->cue_first_row_when_active && scene_mask_layers(title).empty()))
         return false;
+
+    // Automatic activation starts a fresh source-local run after an earlier
+    // transition gate or automation Uncue finished this instance's outro.
+    data->local_cue_control.reset();
+
+    // OBS may activate a duplicate while another instance of this title is on
+    // air. Restart this instance without broadcasting a new global cue/edit.
+    if ((title->current_cue_row >= 0 || title->pending_cue_row >= 0) &&
+        !title->cue_uncue_requested) {
+        data->force_cue_state_sync = true;
+        data->waiting_for_cue = true;
+        data->dirty = true;
+        data->first_frame_pending = true;
+        return true;
+    }
 
     auto exposed = exposed_text_layers(title);
     if (!exposed.empty()) {
@@ -1553,6 +1594,13 @@ static void source_activate(void *priv)
     if (!data)
         return;
     data->scene_mask_foreground_active = true;
+    data->scene_mask_poster = false;
+    data->program_state = {};
+    data->program_identity_revision = std::numeric_limits<uint64_t>::max();
+    std::atomic_store(&data->program_render_title, std::shared_ptr<Title>{});
+    data->pending_program_changes.store(false, std::memory_order_release);
+    if (!data->scene_masks.empty())
+        request_source_presentation_reset(data, "scene-mask-enter-program");
     /* Keep an already-published same-source frame immediately presentable on
      * ordinary scene activation. The next video tick still compares store,
      * external-data and presentation generations before its clean fast path;
@@ -1563,8 +1611,7 @@ static void source_activate(void *priv)
         .arg(QString::fromStdString(data->title_id)));
 
     auto title = source_title_mutable(data);
-    data->activation_cue_pending =
-        data->cue_first_row_when_active && !title;
+    data->activation_cue_pending = !title;
     cue_first_live_text_row_on_activation(data, title);
     sync_scene_mask_scenes_for_cue(data, title);
     if (!title || !title->playlist_restart_on_source_active)
@@ -1601,6 +1648,8 @@ static void source_deactivate(void *priv)
     if (!data)
         return;
     data->scene_mask_foreground_active = false;
+    data->pending_program_changes.store(false, std::memory_order_release);
+    data->seen_store_revision = std::numeric_limits<uint64_t>::max();
     data->activation_cue_pending = false;
     if (data->audio_runtime) data->audio_runtime->stop(true);
     clear_live_cue_runtime_for_source(data, data->title_id);

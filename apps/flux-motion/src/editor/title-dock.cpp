@@ -4,6 +4,7 @@
 
 #include "title-dock.h"
 #include "fxm-modern-controls.h"
+#include "live-text-cue-field.h"
 #include "title-data.h"
 #include "host-context-provider.h"
 #include "title-preview-renderer.h"

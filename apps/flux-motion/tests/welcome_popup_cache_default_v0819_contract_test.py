@@ -42,9 +42,9 @@ for token in ("#141316", "#1a191d", "#7255f5", "#8369f8", "#554a87"):
 assert "kCacheEnabledKey), true).toBool()" in preferences
 assert "std::atomic_bool cache_enabled_{true}" in cache
 
-# This delivery explicitly keeps the existing public/development version.
-assert "project(flux-motion VERSION 0.8.20)" in cmake
-assert 'set(OBS_FXM_DEVELOPMENT_VERSION "422")' in cmake
-assert version == "2026 - v0.8.20-alpha"
+# The standalone public version stays independent of the OBS plugin release.
+assert "project(flux-motion VERSION 0.8.21)" in cmake
+assert int(cmake.split('set(OBS_FXM_DEVELOPMENT_VERSION "', 1)[1].split('"', 1)[0]) >= 422
+assert version == "2026 - v0.8.21-alpha"
 
 print("Welcome popup and first-install prerender default contract passed")

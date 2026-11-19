@@ -6,6 +6,9 @@
 #include "plugin-main.h"
 #include "title-source.h"
 #include "stinger-transition.h"
+#include "transition-cue-gate.h"
+#include <QCoreApplication>
+#include <QThread>
 #include "title-audio-runtime.h"
 #if !defined(FXM_OBS_PLUGIN_WITH_DOCK)
 #define FXM_OBS_PLUGIN_WITH_DOCK 1
@@ -13,6 +16,8 @@
 #if FXM_OBS_PLUGIN_WITH_DOCK
 #include "title-dock.h"
 #include "scene-mask-dock.h"
+#include "obs-dock-layout.h"
+#include "source-settings-buttons-layout.h"
 #include "title-assets.h"
 #include "obs-title-preview-renderer.h"
 #include "obs-editor-host.h"
@@ -51,6 +56,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QSettings>
+#include <QPointer>
 #include <QSignalBlocker>
 #include <QTimer>
 #endif
@@ -69,9 +75,8 @@ static TitleDock *g_dock = nullptr;
 static SceneMaskDock *g_scene_mask_dock = nullptr;
 static QAction *g_dock_menu_action = nullptr;
 static QAction *g_scene_mask_dock_menu_action = nullptr;
-constexpr int kObsDockLayoutStateVersion = 1;
-constexpr const char *kObsDockLayoutSettingsGroup = "ObsDockLayout";
-constexpr const char *kObsMainWindowStateKey = "mainWindowState";
+static QPointer<ObsDockLayout> g_dock_layout;
+static QPointer<SourceSettingsButtonsLayout> g_settings_buttons_layout;
 
 static void open_preferences_from_tools_menu(void *)
 {
@@ -79,32 +84,15 @@ static void open_preferences_from_tools_menu(void *)
     fxm::obs_plugin::show_plugin_preferences(main);
 }
 
-static void save_obs_dock_layout(QMainWindow *main)
+static void save_obs_dock_layout()
 {
-    if (!main || (!g_dock && !g_scene_mask_dock))
-        return;
-
-    QSettings settings(QStringLiteral("FluxMotion"), QStringLiteral("Dock"));
-    settings.beginGroup(QString::fromUtf8(kObsDockLayoutSettingsGroup));
-    settings.setValue(QString::fromUtf8(kObsMainWindowStateKey),
-                      main->saveState(kObsDockLayoutStateVersion));
-    settings.endGroup();
-    settings.sync();
+    if (g_dock_layout) g_dock_layout->save();
 }
 
-static void restore_obs_dock_layout(QMainWindow *main)
+static void restore_obs_dock_layout()
 {
-    if (!main || (!g_dock && !g_scene_mask_dock))
-        return;
-
-    QSettings settings(QStringLiteral("FluxMotion"), QStringLiteral("Dock"));
-    settings.beginGroup(QString::fromUtf8(kObsDockLayoutSettingsGroup));
-    const QByteArray state = settings.value(QString::fromUtf8(kObsMainWindowStateKey)).toByteArray();
-    settings.endGroup();
-    if (!state.isEmpty())
-        main->restoreState(state, kObsDockLayoutStateVersion);
+    if (g_dock_layout) g_dock_layout->restore();
 }
-
 
 static QMenu *find_docks_menu(QMainWindow *main)
 {
@@ -120,9 +108,12 @@ static QMenu *find_docks_menu(QMainWindow *main)
 
 static void destroy_dock_ui(bool frontend_api_available = true)
 {
-    if (frontend_api_available && g_dock) {
-        if (auto *main = qobject_cast<QMainWindow *>(g_dock->parentWidget()))
-            save_obs_dock_layout(main);
+    if (g_dock_layout) {
+        if (frontend_api_available)
+            save_obs_dock_layout();
+        g_dock_layout->stop();
+        delete g_dock_layout;
+        g_dock_layout = nullptr;
     }
 
     if (g_dock_menu_action) {
@@ -266,6 +257,7 @@ bool obs_module_load(void)
     /* 2. Register the renderable source type and title cue hotkeys */
     title_source_register();
     stinger_transition_register();
+    transition_cue_gate_register();
     title_hotkeys_register();
 
     /* 3. Add global preferences entry and defer dock/hotkey creation until the OBS UI is ready */
@@ -282,6 +274,7 @@ bool obs_module_load(void)
 /* ── module unload ──────────────────────────────────────────────── */
 void obs_module_unload(void)
 {
+    transition_cue_gate_stop();
     title_hotkeys_unregister();
     ExternalDataProviderService::instance().shutdown();
     FXM_LOG_INFO("ExternalData", QStringLiteral("External data diagnostics detached"));
@@ -296,6 +289,7 @@ void obs_module_unload(void)
     if (!g_frontend_exiting)
         obs_frontend_remove_event_callback(on_frontend_event, nullptr);
 #if FXM_OBS_PLUGIN_WITH_DOCK
+    delete g_settings_buttons_layout.data();
     destroy_dock_ui(!g_frontend_exiting);
     title_source_set_scene_mask_controls_opener(nullptr);
     fxm::rendering::set_title_preview_renderer(nullptr);
@@ -330,10 +324,38 @@ void obs_module_unload(void)
 }
 
 /* ── frontend event handler ─────────────────────────────────────── */
+static void refresh_transition_cue_gate_sources()
+{
+    transition_cue_gate_clear_watches();
+    obs_frontend_source_list transitions = {};
+    obs_frontend_get_transitions(&transitions);
+    for (size_t i = 0; i < transitions.sources.num; ++i)
+        transition_cue_gate_watch(transitions.sources.array[i]);
+    obs_frontend_source_list_free(&transitions);
+    // Scene overrides and third-party wrappers can assign a private transition
+    // that is absent from the frontend's saved transition list.
+    auto *output = obs_get_output_source(0);
+    transition_cue_gate_watch(output);
+    obs_source_release(output);
+}
+
 static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
 {
+    if (g_frontend_ready && (event == OBS_FRONTEND_EVENT_TRANSITION_CHANGED ||
+                            event == OBS_FRONTEND_EVENT_TRANSITION_LIST_CHANGED))
+        refresh_transition_cue_gate_sources();
+    if (event == OBS_FRONTEND_EVENT_TRANSITION_DURATION_CHANGED)
+        transition_cue_gate_set_duration(obs_frontend_get_transition_duration());
     if (event == OBS_FRONTEND_EVENT_FINISHED_LOADING) {
+        transition_cue_gate_set_enabled(fxm::obs_plugin::uncue_before_scene_transition());
+        transition_cue_gate_set_duration(obs_frontend_get_transition_duration());
+        transition_cue_gate_start([] {
+            return QCoreApplication::instance() &&
+                QThread::currentThread() == QCoreApplication::instance()->thread() &&
+                obs_frontend_get_tbar_position() != 0;
+        });
         FXM_LOG_INFO("Plugin", QStringLiteral("Frontend finished loading"));
+        refresh_transition_cue_gate_sources();
         TitleDataStore::instance().load();
 
 #if FXM_OBS_PLUGIN_WITH_DOCK
@@ -343,6 +365,8 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
         if (g_dock || g_scene_mask_dock)
             destroy_dock_ui();
 
+        if (!g_settings_buttons_layout)
+            g_settings_buttons_layout = new SourceSettingsButtonsLayout(main);
         g_dock = new TitleDock(main);
         QObject::connect(g_dock, &QObject::destroyed, []() {
             g_dock = nullptr;
@@ -357,23 +381,11 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
         });
         obs_frontend_add_custom_qdock("flux-motion-scene-masks-dock",
                                       g_scene_mask_dock);
+        g_dock_layout = new ObsDockLayout(main);
+        g_dock_layout->attach(g_dock);
+        g_dock_layout->attach(g_scene_mask_dock);
         QTimer::singleShot(0, g_dock,
-                           [main]() { restore_obs_dock_layout(main); });
-        QObject::connect(g_dock, &QDockWidget::topLevelChanged, g_dock,
-                         [main]() { save_obs_dock_layout(main); });
-        QObject::connect(g_dock, &QDockWidget::dockLocationChanged, g_dock,
-                         [main]() { save_obs_dock_layout(main); });
-        QObject::connect(g_dock, &QDockWidget::visibilityChanged, g_dock,
-                         [main]() { save_obs_dock_layout(main); });
-        QObject::connect(g_scene_mask_dock, &QDockWidget::topLevelChanged,
-                         g_scene_mask_dock,
-                         [main]() { save_obs_dock_layout(main); });
-        QObject::connect(g_scene_mask_dock, &QDockWidget::dockLocationChanged,
-                         g_scene_mask_dock,
-                         [main]() { save_obs_dock_layout(main); });
-        QObject::connect(g_scene_mask_dock, &QDockWidget::visibilityChanged,
-                         g_scene_mask_dock,
-                         [main]() { save_obs_dock_layout(main); });
+                           []() { restore_obs_dock_layout(); });
         add_docks_menu_entry(main);
 #endif
         g_frontend_ready = true;
@@ -383,6 +395,8 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
     }
 
     if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP) {
+        transition_cue_gate_cancel();
+        transition_cue_gate_clear_watches();
         FXM_LOG_INFO("Plugin", QStringLiteral("Scene collection cleanup"));
         /* OBS emits a cleanup event during initial startup before the scene
          * collection has finished loading. The title store has not changed at
@@ -402,6 +416,7 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
     }
 
     if (event == OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED && g_frontend_ready) {
+        refresh_transition_cue_gate_sources();
         FXM_LOG_INFO("Plugin", QStringLiteral("Scene collection changed"));
         TitleDataStore::instance().load();
         title_source_end_scene_collection_transition();
@@ -413,6 +428,10 @@ static void on_frontend_event(obs_frontend_event event, void * /*priv*/)
     }
 
     if (event == OBS_FRONTEND_EVENT_EXIT) {
+#if FXM_OBS_PLUGIN_WITH_DOCK
+        delete g_settings_buttons_layout.data();
+#endif
+        transition_cue_gate_stop();
         FXM_LOG_INFO("Plugin", QStringLiteral("Frontend exit"));
         g_frontend_exiting = true;
         title_source_begin_shutdown();

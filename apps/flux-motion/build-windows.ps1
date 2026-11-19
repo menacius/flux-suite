@@ -181,7 +181,7 @@ $ObsArchDir = if ($Architecture -eq "Win32" -or $Architecture -eq "x86") { "32bi
 $VcpkgTriplet = if ($Architecture -eq "Win32" -or $Architecture -eq "x86") { "x86-windows" } else { "x64-windows" }
 $PluginDllName = "$PluginName.dll"
 $ObsPluginRoot = Join-Path $InstallRoot $PluginName
-$ObsPluginBin = Join-Path $ObsPluginRoot "bin\$ObsArchDir"
+$ObsPluginBin = $ObsPluginRoot
 $ObsPluginData = Join-Path $ObsPluginRoot "data\locale"
 
 Write-Host "=== Starting Flux Motion build process ==="
@@ -487,7 +487,7 @@ if ($BuildTests) {
 # two deliverables cannot silently diverge.
 Write-Host "`n=== Assembling final OBS plugin package ==="
 $StagedPluginRoot = Join-Path $BuildDir $PluginName
-$StagedPluginBin = Join-Path $StagedPluginRoot "bin\$ObsArchDir"
+$StagedPluginBin = $StagedPluginRoot
 $StagedPluginData = Join-Path $StagedPluginRoot "data"
 $StagedPluginLocale = Join-Path $StagedPluginData "locale"
 if (Test-Path -LiteralPath $StagedPluginRoot) {

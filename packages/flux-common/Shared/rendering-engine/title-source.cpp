@@ -54,7 +54,6 @@
 #include <graphics/vec3.h>
 #include <graphics/vec4.h>
 #include <graphics/matrix4.h>
-#include <graphics/image-file.h>
 #include <util/threading.h>
 
 #include <cairo/cairo.h>
@@ -173,6 +172,7 @@ void title_source_set_scene_mask_controls_opener(
 /* Ordered implementation modules. Keep this list in source order. The shared
  * session implementation includes the explicit extent/time render contract. */
 #include "title-source/source-runtime.inc"
+#include "title-source/source-cue-control.inc"
 #include "title-source/scene-masks-properties.inc"
 #include "title-source/layer-evaluation-layout.inc"
 #include "title-source/compatibility-text-rendering.inc"

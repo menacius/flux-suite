@@ -2,15 +2,15 @@
 
 **Flux Motion (FXM)** is a native C++/Qt broadcast-graphics application with a separately packaged **Flux Motion Plugin for OBS**. It combines multi-title projects, a dockable project workflow, layered 2D/3D editing, rich text, live data and cueing, audio/video layers, reusable nested graphics, native Stinger transitions, GPU rendering, and RAM/disk prerendering without browser sources.
 
-**Current version:** `v0.8.20-alpha` · `Development Version 422`
-**Suite label:** `2026 - v0.8.20-alpha`
+**Current version:** `v0.8.21-alpha` · `Development Version 430`
+**Suite label:** `2026 - v0.8.21-alpha`
 
 This release separates the OBS plugin and Editor distributions,
 adds OBS-only cache/prerender preferences and synchronizes the Flux Suite versions.
 
 ## Highlights since Development Version 281
 
-### Development Version 422 Scene Mask live controls
+### Development Version 430 Scene Mask live controls
 
 - Adds a dedicated OBS Scene Masks dock populated from Flux Motion sources in
   Preview or Program, with joystick position and W–T zoom controls.

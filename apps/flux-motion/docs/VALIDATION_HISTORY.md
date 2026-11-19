@@ -54,7 +54,7 @@ deliveries because they included contracts pinned to Development Version 243,
 obsolete exact source tokens, unavailable `g++`, or incomplete runtime DLL
 paths. These are test-maintenance records, not current production requirements.
 
-## Current audit: v0.8.20-alpha, Development Version 422
+## Previous audit: v0.8.20-alpha, Development Version 422
 
 - Flux Motion OBS plugin: Release compile passed.
 - Flux Motion Editor and renderer: Release compile passed.
@@ -66,3 +66,26 @@ The local OBS dependency bundle still produces non-fatal Qt WebSockets
 `LNK4217` warnings. The complete historical Flux Motion suite remains
 non-gating until its version-pinned contracts and runtime test environment are
 modernized.
+
+## Current audit: v0.8.21-alpha, Development Version 430
+
+- Windows Release builds passed for the OBS plugin, standalone Editor and
+  renderer. The Suite Installer also built successfully.
+- The new plugin passed the DLL-load smoke test against the installed
+  OBS Studio 33.0.1 runtime.
+- All seven focused native checks passed: source Settings buttons, Live Text
+  Cue editing, Scene Mask/dock persistence, transition cue gating, shared-frame
+  rendering, title snapshots and version-label parsing. Transition and frame
+  reuse checks exercised the native OBS runtime and D3D11 graphics path.
+- The title snapshot test also passed in a separate Debug build with assertions
+  enabled. Installer manifest and signed-feed fixture tests both passed.
+- Source contracts: 183/291 passed. All 108 failures were also present in a clean
+  v0.8.20 checkout; no new source-contract failures remained.
+- Full native CTest run with runtime DLL paths supplied: 85/100 passed. Thirteen
+  failing source contracts also failed against the v0.8.20 source snapshot.
+  The text-animator Release test crash reproduced in a fresh build of its
+  unchanged v0.8.20 sources. The remaining failed CTest entry is the aggregate
+  Python suite described above. These historical failures remain non-gating.
+- Updated release-version assertions in the current Scene Mask, standalone
+  playback, distribution, Welcome and Asset Layer contracts.
+- Release ZIP CRCs, executable paths, version files and SHA-256 catalogue hashes passed validation. The rebuilt installer verified the newly signed release feed.

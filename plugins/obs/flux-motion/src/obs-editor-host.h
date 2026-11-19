@@ -7,6 +7,10 @@ namespace fxm::obs_plugin {
 class ObsEditorHost final : public editor_host::IEditorHost {
 public:
     void *main_window_handle() const noexcept override;
+    bool supports_scene_transition_cues() const override { return true; }
+    bool uncue_before_scene_transition() const override;
+    void set_uncue_before_scene_transition(bool enabled) override;
+    bool title_has_pending_program_changes(const std::string &title_id, int row = -1) const override;
     std::vector<editor_host::TitleSourceBinding> title_sources()
         const override;
     int remove_title_sources(

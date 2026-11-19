@@ -48,8 +48,10 @@ bool receiptMatches(const QString &root, const Product &product)
 bool legacyPluginMatches(const QString &root, const Product &product)
 {
     return product.kind == QStringLiteral("obs-plugin") &&
-        QFileInfo(QDir(root).filePath(
-            QStringLiteral("bin/64bit/broadcast-graphics-live.dll"))).isFile();
+        (QFileInfo(QDir(root).filePath(
+            QStringLiteral("bin/64bit/broadcast-graphics-live.dll"))).isFile() ||
+         QFileInfo(QDir(root).filePath(
+            QStringLiteral("bin/64bit/flux-motion.dll"))).isFile());
 }
 
 QStringList installationCandidates(const Product &product, const QString &target)

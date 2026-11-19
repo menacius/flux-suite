@@ -855,8 +855,10 @@ QStringList InstallerWindow::installedPathsFor(const Product &product) const
         const bool current = QFileInfo(
             QDir(root).filePath(product.executable)).isFile();
         const bool legacy = product.kind == QStringLiteral("obs-plugin") &&
-            QFileInfo(QDir(root).filePath(QStringLiteral(
-                "bin/64bit/broadcast-graphics-live.dll"))).isFile();
+            (QFileInfo(QDir(root).filePath(QStringLiteral(
+                "bin/64bit/broadcast-graphics-live.dll"))).isFile() ||
+             QFileInfo(QDir(root).filePath(QStringLiteral(
+                "bin/64bit/flux-motion.dll"))).isFile());
         if (current || legacy)
             result.append(root);
     }

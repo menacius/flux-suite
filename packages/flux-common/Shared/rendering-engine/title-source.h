@@ -53,6 +53,18 @@ enum class TitlePlaybackState : uint8_t {
 
 /* Registers the source type with OBS. Call once from obs_module_load(). */
 void title_source_register();
+struct TitleSourceCueStatus {
+    bool supported = false;
+    bool active = false;
+    bool ending = false;
+    bool pending = false;
+    double remaining_seconds = 0.0;
+};
+// Commands are queued and consumed by the source video tick, never the caller.
+bool title_source_cue(obs_source_t *source, int row = -1);
+bool title_source_uncue(obs_source_t *source);
+TitleSourceCueStatus title_source_cue_status(obs_source_t *source);
+bool title_source_has_pending_program_changes(const std::string &title_id, int row = -1);
 using SceneMaskControlsOpener = void (*)(obs_source_t *source,
                                          const char *layer_id);
 /* Optional host UI hook used by the OBS plugin to expose richer scene-mask
@@ -270,6 +282,7 @@ bool title_gpu_render_session_submit_gpu_cached_prefix(
 #define PROP_PROJECT_PATH  "project_path"
 #define PROP_AUTO_ADVANCE  "auto_advance"
 #define PROP_CUE_FIRST_ROW_WHEN_ACTIVE "cue_first_row_when_active"
+#define PROP_UNCUE_BEFORE_SCENE_TRANSITION "uncue_before_scene_transition"
 #define PROP_SCENE_MASKS_GROUP "scene_masks"
 #define PROP_SCENE_MASK_PREFIX "scene_mask_"
 #define PROP_SCENE_MASK_CLIP_TO_BOUNDS "scene_masks_clip_to_bounds"

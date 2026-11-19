@@ -1,3 +1,22 @@
+static bool source_requires_destination_compositing(const Title &title, double time)
+{
+    for (const auto &layer : title.layers) {
+        if (!layer)
+            continue;
+        const bool needs_destination = layer->type == LayerType::Adjustment ||
+            layer->blend_mode != EffectBlendMode::Normal ||
+            std::any_of(layer->effects.begin(), layer->effects.end(),
+                [](const auto &effect) {
+                    return effect.affect_layers_behind &&
+                        (effect.enabled || effect.enabled_prop.is_animated());
+                });
+        if (needs_destination && gpu_layer_chain_visible(title, *layer, time) &&
+            gpu_layer_chain_opacity(title, *layer, time) > 0.0)
+            return true;
+    }
+    return false;
+}
+
 static void source_hide(void *priv)
 {
     auto *data = static_cast<TitleSourceData *>(priv);
@@ -48,6 +67,7 @@ static void source_video_tick(void *priv, float seconds)
     if (!data)
         return;
 
+    SourceCueStatusPublication cue_status{data};
     const uint64_t diagnostic_tick_serial = ++data->diagnostic_tick_serial;
     const double diagnostic_tick_start_playhead = data->playhead;
     if (seconds < 0.0f || seconds > 0.250f) {
@@ -94,7 +114,10 @@ static void source_video_tick(void *priv, float seconds)
         data->last_project_reload_check = now_project_check;
         reload_source_project(data, false);
     }
-    auto title = source_title_mutable(data);
+    auto authored_title = source_external_cue_control(data, source_title_mutable(data));
+    auto title = source_program_playback_title(data, authored_title);
+    SourceProgramRuntimeCommit program_commit{
+        data, authored_title, title, authored_title ? authored_title->cue_revision : 0};
     if (!title) {
         sync_source_audio_active(data, nullptr, "title-missing");
         clear_live_cue_runtime_for_source(data, data->title_id);
@@ -111,6 +134,21 @@ static void source_video_tick(void *priv, float seconds)
             apply_source_presentation_reset(data, "title-missing");
             data->visual_identity_hash.clear();
             ++data->visual_model_revision;
+        }
+        data->dirty = true;
+        data->first_frame_pending = true;
+        return;
+    }
+
+    /* libobs ticks every source, including sources absent from all displays.
+     * Such a source can never clear first_frame_pending in video_render. Do
+     * not repeatedly prepare its entire graph while waiting for that render. */
+    if (!data->editor_transport_controlled &&
+        !data->shown_on_display.load(std::memory_order_acquire) &&
+        !data->scene_mask_foreground_active) {
+        if (data->audio_runtime && data->audio_transport_running) {
+            data->audio_runtime->stop(true);
+            data->audio_transport_running = false;
         }
         data->dirty = true;
         data->first_frame_pending = true;
@@ -191,7 +229,24 @@ static void source_video_tick(void *priv, float seconds)
         return;
     }
 
-    if (data->force_cue_state_sync || title->cue_revision != data->seen_cue_revision) {
+    // Source duplication belongs to OBS: shared Preview/Program sources keep
+    // one GPU session. Only a source outside Program displays a poster.
+    data->scene_mask_poster = !data->editor_transport_controlled &&
+        !data->scene_mask_foreground_active && !data->scene_masks.empty();
+    if (data->scene_mask_poster) {
+        const bool has_pause = title->playback_mode == 2;
+        const double poster_time = has_pause
+            ? std::clamp(title->pause_time, 0.0, title->duration)
+            : (title->cue_end_behavior == 2 ? 0.0 : title->duration);
+        const bool visible = has_pause || title->cue_end_behavior != 1;
+        if (data->playhead != poster_time) data->dirty = true;
+        data->playhead = poster_time;
+        data->playing = false;
+        set_source_output_visible(data, visible, "scene-mask-preview-poster");
+    }
+
+    if (!data->scene_mask_poster &&
+        (data->force_cue_state_sync || title->cue_revision != data->seen_cue_revision)) {
         data->playback_state.store(TitlePlaybackState::Queued,
                                    std::memory_order_release);
         const int requested_cue_row = title->pending_cue_row >= 0
@@ -370,11 +425,18 @@ static void source_video_tick(void *priv, float seconds)
         }
     }
 
-    const bool has_clock_layer = title_has_clock_layer(title);
-    const bool has_ticker_layer = title_has_ticker_layer(title);
-    const bool has_independent_asset_layer =
-        title_has_independent_asset_layer(title);
-    const bool has_timeline_animation = title_has_animation(title);
+    const uint64_t analysis_revision = source_model_revision(data);
+    if (data->analyzed_visual_revision != analysis_revision || data->program_render_dirty) {
+        data->has_clock_layer = title_has_clock_layer(title);
+        data->has_ticker_layer = title_has_ticker_layer(title);
+        data->has_independent_asset_layer = title_has_independent_asset_layer(title);
+        data->has_timeline_animation = title_has_animation(title);
+        data->analyzed_visual_revision = analysis_revision;
+    }
+    const bool has_clock_layer = data->has_clock_layer;
+    const bool has_ticker_layer = data->has_ticker_layer;
+    const bool has_independent_asset_layer = data->has_independent_asset_layer;
+    const bool has_timeline_animation = data->has_timeline_animation;
     const bool static_clock_title = has_clock_layer && !has_timeline_animation;
 
     if (data->playing && (!static_clock_title ||
@@ -547,7 +609,8 @@ static void source_video_tick(void *priv, float seconds)
      * cleared as soon as the source is inactive or the cue actually ends. */
     publish_live_cue_runtime(data, title);
 
-    if (has_ticker_layer || has_independent_asset_layer)
+    if (data->output_visible.load(std::memory_order_acquire) &&
+        (has_ticker_layer || has_independent_asset_layer))
         data->dirty = true;
 
     if (static_clock_title || (!data->playing && has_clock_layer)) {
@@ -559,7 +622,11 @@ static void source_video_tick(void *priv, float seconds)
     }
 
     const uint64_t revision = source_model_revision(data);
-    if (data->audio_runtime) {
+    if (data->audio_runtime && data->source_audio_active &&
+        (data->editor_audio_preview || data->shown_on_display.load(std::memory_order_acquire)) &&
+        (data->playing || data->output_visible.load(std::memory_order_acquire) ||
+         data->editor_audio_preview)) {
+        data->audio_transport_running = true;
         data->audio_runtime->bind_title(title, revision);
         const bool audible = data->editor_audio_preview
             ? obs_source_active(data->source)
@@ -569,12 +636,21 @@ static void source_video_tick(void *priv, float seconds)
         data->audio_runtime->transport(data->playhead, data->playing, audible,
                                        false, data->playback_reverse);
         data->audio_runtime->pump();
+    } else if (data->audio_runtime && data->audio_transport_running) {
+        data->audio_runtime->stop(true);
+        data->audio_transport_running = false;
     }
     const uint64_t external_revision = pending_external_revision;
     const bool store_revision_changed =
         revision != data->seen_store_revision;
     const bool external_revision_changed =
         external_revision != data->seen_external_data_revision;
+    if (external_revision_changed && title != authored_title &&
+        title->external_data_enabled && title->current_cue_row >= 0) {
+        apply_live_text_row(title, title->current_cue_row);
+        data->program_render_dirty = true;
+        data->dirty = true;
+    }
     if (store_revision_changed || external_revision_changed) {
         data->seen_store_revision = revision;
         data->seen_external_data_revision = external_revision;
@@ -608,15 +684,13 @@ static void source_video_tick(void *priv, float seconds)
             if (settings) {
                 const bool keep_scene_masks_foreground =
                     data->scene_mask_foreground_active;
-                if (keep_scene_masks_foreground)
-                    release_active_scene_mask_scenes(data);
-                refresh_scene_mask_configs(data, settings);
+                refresh_scene_mask_configs(data, settings, title);
                 if (keep_scene_masks_foreground)
                     sync_scene_mask_scenes_for_cue(data, title);
                 obs_data_release(settings);
             }
         }
-        if (store_revision_changed || external_visual_change) {
+        if (!had_visual_identity || visual_identity_changed || external_visual_change) {
             data->effect_layer_cache.clear();
             data->dirty = true;
         }
@@ -2641,15 +2715,14 @@ technique Draw { pass { vertex_shader = VSDefault(v); pixel_shader = PSMask(v); 
 
 
 struct ExtensionImageTexture {
-    gs_image_file_t image{};
-    bool initialized = false;
+    gs_texture_t *texture = nullptr;
     qint64 modified_msecs = 0;
     qint64 file_size = -1;
     uint64_t last_used = 0;
     ~ExtensionImageTexture()
     {
-        if (initialized)
-            gs_image_file_free(&image);
+        if (texture)
+            gs_texture_destroy(texture);
     }
 };
 
@@ -2690,23 +2763,28 @@ static gs_texture_t *extension_image_texture(const QString &absolute_path)
         if (found->second->modified_msecs == modified &&
             found->second->file_size == fileSize) {
             found->second->last_used = ++g_extension_image_texture_tick;
-            return found->second->image.texture;
+            return found->second->texture;
         }
         g_extension_image_textures.erase(found);
     }
 
     auto entry = std::make_unique<ExtensionImageTexture>();
-    gs_image_file_init(&entry->image, key.c_str());
-    entry->initialized = true;
-    if (!entry->image.loaded)
+    // OBS 33 removed the old gs_image_file ABI. Decode the first frame with
+    // Qt and upload straight-alpha RGBA through the stable graphics API.
+    QImageReader reader(canonical);
+    const QImage pixels = reader.read().convertToFormat(QImage::Format_RGBA8888);
+    if (pixels.isNull())
         return nullptr;
-    gs_image_file_init_texture(&entry->image);
-    if (!entry->image.texture)
+    const uint8_t *planes[] = { pixels.constBits() };
+    entry->texture = gs_texture_create(static_cast<uint32_t>(pixels.width()),
+                                       static_cast<uint32_t>(pixels.height()),
+                                       GS_RGBA, 1, planes, 0);
+    if (!entry->texture)
         return nullptr;
     entry->modified_msecs = modified;
     entry->file_size = fileSize;
     entry->last_used = ++g_extension_image_texture_tick;
-    gs_texture_t *texture = entry->image.texture;
+    gs_texture_t *texture = entry->texture;
     g_extension_image_textures.emplace(key, std::move(entry));
 
     while (g_extension_image_textures.size() > kMaxExtensionImageTextures) {

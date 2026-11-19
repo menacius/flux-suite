@@ -241,6 +241,7 @@ private:
     bool          template_icon_view_ = false;
     bool          visibility_filter_active_ = false;
     bool          titles_collapsed_ = false;
+    QAction      *act_titles_collapsed_ = nullptr;
     int           titles_expanded_width_ = 360;
     int           titles_expanded_splitter_size_ = 240;
     Qt::DockWidgetArea stored_dock_area_ = Qt::LeftDockWidgetArea;

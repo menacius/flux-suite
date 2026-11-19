@@ -838,6 +838,9 @@ public:
             const auto cue_state = static_cast<TitleCueVisualState>(
                 index.data(kTitleCueVisualStateRole).toInt());
             const QColor cue_color = title_cue_visual_color(cue_state);
+            if (cue_state == TitleCueVisualState::PendingChanges)
+                painter->drawPixmap(thumb_rect.right() - 17, thumb_rect.top() + 2,
+                    obs_icon("cue.svg", cue_color).pixmap(16, 16));
             if (cue_color.isValid())
                 paint_cue_state_border(painter, thumb_rect.adjusted(1, 1, -1, -1), 3, cue_color);
             if (index.data(kTitlePlaylistActiveRole).toBool())
@@ -876,6 +879,9 @@ public:
         const auto cue_state = static_cast<TitleCueVisualState>(
             index.data(kTitleCueVisualStateRole).toInt());
         const QColor cue_color = title_cue_visual_color(cue_state);
+        if (cue_state == TitleCueVisualState::PendingChanges)
+            painter->drawPixmap(thumb_rect.right() - 21, thumb_rect.top() + 3,
+                obs_icon("cue.svg", cue_color).pixmap(18, 18));
         if (cue_color.isValid())
             paint_cue_state_border(painter, thumb_rect.adjusted(1, 1, -1, -1), 4, cue_color);
 

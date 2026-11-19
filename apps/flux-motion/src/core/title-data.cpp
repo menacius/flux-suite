@@ -2111,11 +2111,14 @@ TitleDataStore::get_title_snapshot(const std::string &id) const
 void TitleDataStore::delete_title(const std::string &id)
 {
     bool deleted = false;
+    bool was_cued = false;
     {
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         for (const auto &title : titles_) {
-            if (title && title->id == id)
+            if (title && title->id == id) {
+                was_cued = title->current_cue_row >= 0 || title->pending_cue_row >= 0;
                 title_mutexes_.erase(title.get());
+            }
         }
         const auto old_size = titles_.size();
         titles_.erase(
@@ -2128,8 +2131,10 @@ void TitleDataStore::delete_title(const std::string &id)
     }
 
     if (deleted) {
-        fxm::ticker_runtime::clear_title(id);
-        fxm::asset_runtime::clear_title(id);
+        if (!was_cued) {
+            fxm::ticker_runtime::clear_title(id);
+            fxm::asset_runtime::clear_title(id);
+        }
         notify_change();
     }
 }
@@ -8222,8 +8227,20 @@ void TitleDataStore::load()
             }
         }
         size_t loaded_count = 0;
+        bool same_collection = false;
         {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
+            same_collection = !loaded_path_.empty() && loaded_path_ == path;
+            if (same_collection) {
+                for (auto &incoming : loaded) {
+                    const auto existing = std::find_if(titles_.begin(), titles_.end(),
+                        [&](const auto &title) {
+                            return title && incoming && title->id == incoming->id;
+                        });
+                    if (existing != titles_.end())
+                        copy_title_cue_runtime_state(*incoming, **existing);
+                }
+            }
             loaded_path_ = path;
             clear_title_publications_locked();
             titles_ = std::move(loaded);
@@ -8236,8 +8253,10 @@ void TitleDataStore::load()
             persistence_ready_for_save_ = true;
             loaded_count = titles_.size();
         }
-        fxm::ticker_runtime::clear_all();
-        fxm::asset_runtime::clear_all();
+        if (!same_collection) {
+            fxm::ticker_runtime::clear_all();
+            fxm::asset_runtime::clear_all();
+        }
         notify_change();
         host_log(fxm::LogLevel::Info, QStringLiteral(
             "Loaded %1 title(s) for this scene collection.")

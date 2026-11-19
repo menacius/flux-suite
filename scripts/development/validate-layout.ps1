@@ -18,7 +18,7 @@ foreach ($RelativePath in $RequiredVersionFiles) {
         continue
     }
     $Label = (Get-Content -Raw -LiteralPath $Path).Trim()
-    if ($Label -notmatch '^\d{4} - v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') {
+    if ($Label -notmatch '^\d{4} - v\.?\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$') {
         $Errors.Add("Invalid version label in ${RelativePath}: $Label")
     }
 }

@@ -1,4 +1,24 @@
     auto *live_text_settings_menu = new QMenu(btn_live_text_settings_);
+    act_titles_collapsed_ = live_text_settings_menu->addAction(
+        fxm_tr("OBSTitles.CollapseTitlesAndGraphics"));
+    act_titles_collapsed_->setCheckable(true);
+    connect(act_titles_collapsed_, &QAction::toggled, this,
+            [this](bool collapsed) { set_titles_collapsed(collapsed); });
+    if (auto *host = fxm::editor_host::editor_host(); host && host->supports_scene_transition_cues()) {
+        auto *uncue = live_text_settings_menu->addAction(QStringLiteral("Uncue before scene transition"));
+        uncue->setToolTip(QStringLiteral(
+            "Enable uncue before transitions only for sources that have the option enabled in their Properties."));
+        uncue->setCheckable(true);
+        uncue->setChecked(host->uncue_before_scene_transition());
+        connect(uncue, &QAction::toggled, this, [host](bool enabled) {
+            host->set_uncue_before_scene_transition(enabled);
+        });
+        connect(live_text_settings_menu, &QMenu::aboutToShow, this, [host, uncue] {
+            const QSignalBlocker blocker(uncue);
+            uncue->setChecked(host->uncue_before_scene_transition());
+        });
+    }
+    live_text_settings_menu->addSeparator();
     auto *lines_widget = new QWidget(live_text_settings_menu);
     auto *lines_layout = new QHBoxLayout(lines_widget);
     lines_layout->setContentsMargins(8, 4, 8, 4);
@@ -200,6 +220,8 @@
     connect(playlist_timer_, &QTimer::timeout, this, &TitleDock::on_playlist_tick);
 
     load_dock_settings();
+    // Restore the widget constraints and disclosure rail together with the flag.
+    set_titles_collapsed(titles_collapsed_, false);
     if (btn_visibility_filter_) btn_visibility_filter_->setChecked(visibility_filter_active_);
     if (act_playlist_loop_) act_playlist_loop_->setChecked(playlist_loop_);
     if (act_playlist_reverse_) act_playlist_reverse_->setChecked(playlist_reverse_);

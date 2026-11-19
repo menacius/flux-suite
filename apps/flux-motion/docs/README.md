@@ -1,6 +1,10 @@
 # Flux Motion documentation
 
-These are the canonical documents for `v0.8.20-alpha` Development Version 422. Current behavior belongs in the thematic guides; release history belongs in the consolidated changelog.
+These are the canonical documents for `v0.8.21-alpha` Development Version 430. Current behavior belongs in the thematic guides; release history belongs in the consolidated changelog.
+
+See [changes since v0.8.20](../../../docs/releases/v0.8.21-alpha.md) and the
+[OBS cue automation guide](../../../plugins/obs/flux-motion/CUE-AUTOMATION.md)
+for the latest release and integration details.
 
 | Document | Purpose |
 | --- | --- |

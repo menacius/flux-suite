@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(flux-suite-installer VERSION 0.8.20 LANGUAGES CXX)
+project(flux-suite-installer VERSION 0.8.21 LANGUAGES CXX)
 
 if(NOT DEFINED FLUX_REPOSITORY_ROOT)
     get_filename_component(FLUX_REPOSITORY_ROOT

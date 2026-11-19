@@ -1,3 +1,10 @@
+# 2026 - v0.8.21-alpha
+
+- Updated Windows OBS plugin packaging metadata for DLLs beside the data folder.
+- Recognized previous Flux Motion and Broadcast Graphics Live plugin layouts
+  during installation detection and upgrades.
+- See the [complete changelog since v0.8.20](https://github.com/menacius/flux-suite/blob/v0.8.21-alpha/docs/releases/v0.8.21-alpha.md).
+
 # 2026 - v0.8.20-alpha
 
 - Published the new OBS Scene Masks dock with compact Preview/Monitor sections,

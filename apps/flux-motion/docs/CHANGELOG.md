@@ -1,3 +1,14 @@
+# 2026 - v0.8.21-alpha — Development Version 430
+
+- Preserved Program artwork through authoring edits and outgoing outros, with
+  pending-change indicators scoped to the live cue row.
+- Preserved cue and playlist state on same-library reloads.
+- Fixed double-click word editing in Live Text Cue fields.
+- Added persistent collapse controls and improved OBS dock-layout restoration.
+- Improved shared-source rendering, scene-mask caching and hidden-source work.
+- See the [complete changelog since v0.8.20](https://github.com/menacius/flux-suite/blob/v0.8.21-alpha/docs/releases/v0.8.21-alpha.md)
+  for OBS compatibility, cue automation, transitions and installer changes.
+
 # 2026 - v0.8.20-alpha
 
 ## Development Version 422 — Scene Mask live controls and durable shortcuts

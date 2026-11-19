@@ -12,10 +12,7 @@ def read(relative: str) -> str:
 
 
 def test_live_text_requires_explicit_edit_focus():
-    helpers = read("src/editor/title-dock/template-library-helpers.inc")
-    field = helpers.split("class LiveTextCueField", 1)[1].split(
-        "class LiveImageCueField", 1
-    )[0]
+    field = read("Editor/live-text-cue-field.h")
     assert "edit_focus_armed_" in field
     assert "setFocusPolicy(Qt::ClickFocus);" in field
     assert "void mousePressEvent(QMouseEvent *event) override" in field

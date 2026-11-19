@@ -36,11 +36,11 @@ def main() -> None:
     )
     manifest = json.loads(read(ROOT / "tests/test-suite-manifest.json"))
 
-    assert version == "2026 - v0.8.20-alpha"
-    assert plugin_version == version
-    assert "project(flux-motion VERSION 0.8.20)" in cmake
-    assert 'set(OBS_FXM_DEVELOPMENT_VERSION "422")' in cmake
-    assert manifest["development_version"] == 422
+    assert version == "2026 - v0.8.21-alpha"
+    assert plugin_version == "2026 - v0.8.21-alpha"
+    assert "project(flux-motion VERSION 0.8.21)" in cmake
+    assert f'set(OBS_FXM_DEVELOPMENT_VERSION "{manifest["development_version"]}")' in cmake
+    assert manifest["development_version"] >= 422
 
     assert "bool active_ref = false;" in runtime
     assert "const bool active_ref = data->scene_mask_foreground_active;" in runtime

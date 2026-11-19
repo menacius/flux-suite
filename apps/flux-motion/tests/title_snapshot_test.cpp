@@ -115,6 +115,92 @@ int main()
     assert(live.cue_persistence_transition);
     assert(live.cue_persistent_text_columns.size() == 3);
 
+    // A file save/reload changes authoring without issuing another cue. This
+    // includes synthetic row zero for graphics without an exposed cue table.
+    Title reloaded = clone_title_snapshot(authored);
+    const auto reload_name = reloaded.name;
+    copy_title_cue_runtime_state(reloaded, live);
+    assert(reloaded.name == reload_name);
+    assert(reloaded.cue_revision == live.cue_revision);
+    assert(reloaded.current_cue_row == live.current_cue_row);
+    assert(reloaded.pending_cue_row == live.pending_cue_row);
+    assert(reloaded.cue_uncue_requested == live.cue_uncue_requested);
+    assert(reloaded.playlist_next_due_ms == live.playlist_next_due_ms);
+    assert(reloaded.cue_persistent_text_columns == live.cue_persistent_text_columns);
+    Title graphic;
+    graphic.current_cue_row = 0;
+    graphic.cue_revision = 17;
+    Title reloaded_graphic;
+    copy_title_cue_runtime_state(reloaded_graphic, graphic);
+    assert(reloaded_graphic.live_text_rows.empty());
+    assert(reloaded_graphic.current_cue_row == 0);
+    assert(reloaded_graphic.cue_revision == 17);
+
+    // Saves stay pending on Program, including while the old outro plays.
+    // Only the next positive cue takes the newly authored layer graph.
+    auto program_control = clone_title_snapshot(shared_title);
+    program_control->current_cue_row = 0;
+    program_control->cue_revision = 1;
+    TitleProgramSnapshot program;
+    assert(program.update(program_control, "original"));
+    const auto held_graph = program.title;
+    program_control->layers[0]->name = "edited on disk";
+    assert(!program.update(program_control, "edited"));
+    assert(program.pending_changes);
+    assert(program.title == held_graph);
+    assert(program.title->layers[0]->name == "original");
+    program_control->cue_uncue_requested = true;
+    ++program_control->cue_revision;
+    assert(!program.update(program_control, "edited"));
+    assert(program.title->layers[0]->name == "original");
+    program_control->current_cue_row = -1;
+    program_control->cue_uncue_requested = false;
+    ++program_control->cue_revision;
+    assert(!program.update(program_control, "edited"));
+    assert(program.pending_changes);
+    program_control->current_cue_row = 0;
+    ++program_control->cue_revision;
+    assert(program.update(program_control, "edited"));
+    assert(!program.pending_changes);
+    assert(program.title->layers[0]->name == "edited on disk");
+    const auto unchanged_graph = program.title;
+    for (int frame = 0; frame < 10000; ++frame) {
+        assert(!program.update(program_control, "edited"));
+        assert(program.title == unchanged_graph); // No graph copy in steady-state ticks.
+    }
+
+    // An OBS source in Program is not necessarily an on-air title. Editing
+    // its uncued authoring document must not create a pending Program change.
+    auto off_air = clone_title_snapshot(shared_title);
+    off_air->current_cue_row = -1;
+    off_air->pending_cue_row = -1;
+    off_air->cue_revision = 0;
+    TitleProgramSnapshot uncued_program;
+    assert(uncued_program.update(off_air, "before cue", false));
+    off_air->layers[0]->name = "edited while uncued";
+    assert(uncued_program.update(off_air, "uncued edit", false));
+    assert(!uncued_program.pending_changes);
+    assert(uncued_program.title->layers[0]->name == "edited while uncued");
+    const auto uncued_graph = uncued_program.title;
+    assert(!uncued_program.update(off_air, "uncued edit", false));
+    assert(uncued_program.title == uncued_graph);
+    off_air->current_cue_row = 0;
+    ++off_air->cue_revision;
+    assert(uncued_program.update(off_air, "uncued edit", false));
+    assert(!uncued_program.pending_changes);
+    off_air->layers[0]->name = "edited while on air";
+    assert(!uncued_program.update(off_air, "on-air edit", true));
+    assert(uncued_program.pending_changes);
+    assert(uncued_program.title->layers[0]->name == "edited while uncued");
+    // The held outgoing graph survives uncue, even if another edit follows.
+    off_air->current_cue_row = -1;
+    assert(!uncued_program.update(off_air, "later uncued edit", false));
+    assert(uncued_program.title->layers[0]->name == "edited while uncued");
+    off_air->current_cue_row = 0;
+    ++off_air->cue_revision;
+    assert(uncued_program.update(off_air, "later uncued edit", false));
+    assert(!uncued_program.pending_changes);
+
     /* Repeated restore must release the previous deep layer graph rather than
      * retaining one graph per undo/open-close cycle. */
     for (int iteration = 0; iteration < 1000; ++iteration) {

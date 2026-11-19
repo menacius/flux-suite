@@ -43,6 +43,7 @@
         runtime_scene_mask_rasters;
     gs_effect_t *runtime_scene_mask_effect = nullptr;
     uint64_t runtime_scene_mask_generation = 0;
+    std::atomic<uint64_t> diagnostic_auxiliary_raster_builds {0};
     /* Prevent source-aware effects from recursively evaluating dependency
      * cycles (for example A displaces B while B displaces A). */
     std::unordered_set<std::string> source_effect_visiting;
