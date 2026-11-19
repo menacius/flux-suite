@@ -17,5 +17,5 @@ jobs:
         with:
           version: "6.8.3"
           arch: win64_msvc2022_64
-      - run: cmake -S . -B out/build/installer -G "Visual Studio 17 2022" -A x64 -DFLUX_BUILD_INSTALLER=ON
+      - run: cmake -S . -B out/build/installer -A x64 -DFLUX_BUILD_INSTALLER=ON
       - run: cmake --build out/build/installer --config Release
